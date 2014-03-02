@@ -1,0 +1,36 @@
+package main
+
+import (
+	"fmt"
+	"net/http"
+)
+
+var store = NewURLStore()
+
+func main() {
+	http.HandleFunc("/", Redirect)
+	http.HandleFunc("/add", Add)
+	http.ListenAndServe(":8080", nil)
+}
+
+func Redirect(w http.ResponseWriter, r *http.Request) {
+}
+
+func Add(w http.ResponseWriter, r *http.Request) {
+	url := r.FormValue("url")
+	if url == "" {
+		fmt.Fprint(w, AddForm)
+		return
+	}
+	key := store.Put(url)
+	fmt.Fprintf(w, "http://localhost:8080/%s", key)
+}
+
+const AddForm = `
+<html>
+<form method="POST" action="/add">
+URL: <input type="text" name="url">
+<input type="submit" value="Add">
+</form>
+</html>
+`
