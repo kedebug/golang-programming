@@ -5,7 +5,7 @@ import (
 	"net/http"
 )
 
-var store = NewURLStore("store.json")
+var store = NewURLStore("store.gob")
 
 func main() {
 	http.HandleFunc("/", Redirect)
