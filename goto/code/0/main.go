@@ -14,6 +14,13 @@ func main() {
 }
 
 func Redirect(w http.ResponseWriter, r *http.Request) {
+	key := r.URL.Path[1:]
+	url := store.Get(key)
+	if url == "" {
+		http.NotFound(w, r)
+		return
+	}
+	http.Redirect(w, r, url, http.StatusFound)
 }
 
 func Add(w http.ResponseWriter, r *http.Request) {
