@@ -1,16 +1,22 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
+	"github.com/nf/stat"
 	"io"
 	"log"
 	"net/rpc"
 	"os"
 	"sync"
+	"time"
 )
 
-const saveQueueLength = 1000
+const (
+	saveQueueLength = 1000
+	saveTimeout     = 10e9
+)
 
 type Store interface {
 	Get(key, url *string) error
@@ -18,9 +24,10 @@ type Store interface {
 }
 
 type URLStore struct {
-	urls map[string]string
-	mu   sync.RWMutex
-	save chan record
+	urls  map[string]string
+	mu    sync.RWMutex
+	count int
+	save  chan record
 }
 
 type record struct {
@@ -40,6 +47,7 @@ func NewURLStore(filename string) *URLStore {
 }
 
 func (s *URLStore) Get(key, url *string) error {
+	defer statSend("store get")
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if u, ok := s.urls[*key]; ok {
@@ -50,6 +58,7 @@ func (s *URLStore) Get(key, url *string) error {
 }
 
 func (s *URLStore) Set(key, url *string) error {
+	defer statSend("store set")
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if _, present := s.urls[*key]; present {
@@ -84,7 +93,8 @@ func (s *URLStore) load(filename string) error {
 		return err
 	}
 	defer f.Close()
-	d := json.NewDecoder(f)
+	b := bufio.NewReader(f)
+	d := json.NewDecoder(b)
 	for err == nil {
 		var r record
 		if err = d.Decode(&r); err == nil {
@@ -102,10 +112,20 @@ func (s *URLStore) saveLoop(filename string) error {
 	if err != nil {
 		log.Fatal("URLStore: ", err)
 	}
-	e := json.NewEncoder(f)
+	b := bufio.NewWriter(f)
+	e := json.NewEncoder(b)
+	t := time.NewTicker(saveTimeout)
+	defer f.Close()
+	defer b.Flush()
 	for {
-		r := <-s.save
-		if err := e.Encode(r); err != nil {
+		var err error
+		select {
+		case r := <-s.save:
+			err = e.Encode(r)
+		case <-t.C:
+			err = b.Flush()
+		}
+		if err != nil {
 			log.Println("URLStore: ", err)
 		}
 	}
@@ -141,4 +161,10 @@ func (s *ProxyStore) Put(url, key *string) error {
 	}
 	s.urls.Set(key, url)
 	return nil
+}
+
+func statSend(s string) {
+	if *statServer != "" {
+		stat.In <- s
+	}
 }
