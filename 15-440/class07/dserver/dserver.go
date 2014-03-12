@@ -1,7 +1,7 @@
-package sserver
+package dserver
 
 import (
-	"../bufi"
+	"github.com/kedebug/golang-programming/15-440/class07/bufi"
 )
 
 const (
