@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/kedebug/golang-programming/15-440/class07/bufi"
 	"github.com/kedebug/golang-programming/15-440/class07/dserver"
-	"gob"
 	"log"
 	"net"
 	"net/http"
@@ -102,7 +101,7 @@ func (srv *SrvBuf) Empty(arg *Val, reply *Val) error {
 	if srv.abuf.Empty() {
 		*reply = trueVal()
 	} else {
-		*reply = falseval()
+		*reply = falseVal()
 	}
 	Vlogf(2, "Empty? %v\n", reply.X)
 	Vlogf(3, "Buffer: %s\n", srv.abuf.String())
@@ -143,4 +142,102 @@ func Serve(port int) {
 	CheckFatal(e)
 	Vlogf(1, "Running server on port: %d\n", port)
 	Vlogf(3, "Buffer: %s\n", srv.abuf.String())
+	http.Serve(l, nil)
+}
+
+type SClient struct {
+	client *rpc.Client
+}
+
+func NewSClient(host string, port int) *SClient {
+	gob.Register(islice)
+	gob.Register(sbuf)
+	hostport := fmt.Sprintf("%s:%d", host, port)
+	client, e := rpc.DialHTTP("tcp", hostport)
+	CheckFatal(e)
+	Vlogf(1, "Connected to %s\n", hostport)
+	return &SClient{client: client}
+}
+
+func (cli *SClient) Call(serviceMethod string,
+	args interface{}, reply interface{}) error {
+	return cli.client.Call(serviceMethod, args, reply)
+}
+
+func (cli *SClient) Insert(v interface{}) {
+	av := Val{v}
+	var rv Val
+	e := cli.Call("SrvBuf.Insert", &av, &rv)
+	Vlogf(2, "Inserted %v\n", v)
+	if CheckReport(1, e) {
+		fmt.Println("Insert failure")
+	}
+}
+func (cli *SClient) Front() interface{} {
+	av := nullVal()
+	var rv Val
+	e := cli.Call("SrvBuf.Front", &av, &rv)
+	if CheckReport(1, e) {
+		fmt.Printf("Front failure: %s\n", e.Error())
+		return nullVal()
+	}
+	Vlogf(2, "Front value %v\n", rv.X)
+	return rv.X
+}
+
+func (cli *SClient) Remove() interface{} {
+	av := nullVal()
+	var rv Val
+	e := cli.Call("SrvBuf.Remove", &av, &rv)
+	if CheckReport(1, e) {
+		fmt.Printf("Remove failure: %s\n", e.Error())
+		return nullVal()
+	}
+	Vlogf(2, "Removed %v\n", rv.X)
+	return rv.X
+}
+
+func (cli *SClient) Empty() bool {
+	av := nullVal()
+	var rv Val
+	e := cli.Call("SrvBuf.Empty", &av, &rv)
+	if CheckReport(1, e) {
+		fmt.Printf("Empty failure: %s\n", e)
+		return false
+	}
+	Vlogf(2, "Empty? %s\n", rv)
+	return truth(&rv)
+}
+
+func (cli *SClient) Flush() {
+	av := nullVal()
+	var rv Val
+	e := cli.Call("SrvBuf.Flush", &av, &rv)
+	Vlogf(2, "Flushed\n")
+	if CheckReport(1, e) {
+		fmt.Printf("Flush failure: %s\n", e)
+	}
+}
+
+func (cli *SClient) Contents() Islice {
+	av := nullVal()
+	var rv Val
+	e := cli.Call("SrvBuf.Contents", &av, &rv)
+	Vlogf(2, "Contents %v\n", rv.X.(Islice))
+	if CheckReport(1, e) {
+		fmt.Printf("Contents failure: %s\n", e.Error())
+	}
+	return rv.X.(Islice)
+}
+
+func (cli *SClient) List() *bufi.Buf {
+	av := nullVal()
+	var rv Val
+	e := cli.Call("SrvBuf.List", &av, &rv)
+	b := rv.X.(*bufi.Buf)
+	Vlogf(2, "List %v\n", b.Contents())
+	if CheckReport(1, e) {
+		fmt.Printf("Contents failure: %s\n", e.Error())
+	}
+	return b
 }
