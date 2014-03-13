@@ -6,9 +6,9 @@
 package lspnet
 
 import (
-	"net"
-	"P1-f12/official/lsplog"
+	"github.com/kedebug/golang-programming/15-440/P1-F11/lsplog"
 	"math/rand"
+	"net"
 )
 
 // Useful parameters
@@ -47,24 +47,24 @@ type UDPConn struct {
 func ResolveUDPAddr(ntwk, addr string) (*UDPAddr, error) {
 	a, err := net.ResolveUDPAddr(ntwk, addr)
 	if err == nil {
-		return &UDPAddr{a.IP, a.Port}, err
+		return &UDPAddr{IP: a.IP, Port: a.Port}, err
 	}
 	return nil, err
 }
 
 func (addr *UDPAddr) String() string {
-	naddr := &net.UDPAddr{addr.IP, addr.Port}
+	naddr := &net.UDPAddr{IP: addr.IP, Port: addr.Port}
 	return naddr.String()
 }
 
 func DialUDP(ntwk string, laddr, raddr *UDPAddr) (*UDPConn, error) {
 	var nladdr *net.UDPAddr = nil
 	if laddr != nil {
-		nladdr = &net.UDPAddr{laddr.IP, laddr.Port}
+		nladdr = &net.UDPAddr{IP: laddr.IP, Port: laddr.Port}
 	}
 	var nraddr *net.UDPAddr = nil
 	if raddr != nil {
-		nraddr = &net.UDPAddr{raddr.IP, raddr.Port}
+		nraddr = &net.UDPAddr{IP: raddr.IP, Port: raddr.Port}
 	}
 	ncon, err := net.DialUDP(ntwk, nladdr, nraddr)
 	rcon := &UDPConn{ncon}
@@ -74,14 +74,14 @@ func DialUDP(ntwk string, laddr, raddr *UDPAddr) (*UDPConn, error) {
 func ListenUDP(ntwk string, laddr *UDPAddr) (*UDPConn, error) {
 	var nladdr *net.UDPAddr = nil
 	if laddr != nil {
-		nladdr = &net.UDPAddr{laddr.IP, laddr.Port}
+		nladdr = &net.UDPAddr{IP: laddr.IP, Port: laddr.Port}
 	}
 	ncon, err := net.ListenUDP(ntwk, nladdr)
 	rcon := &UDPConn{ncon}
 	return rcon, err
 }
 
-func (con *UDPConn) ReadFromUDP(b [] byte) (n int, addr *UDPAddr, err error) {
+func (con *UDPConn) ReadFromUDP(b []byte) (n int, addr *UDPAddr, err error) {
 	var buffer [2000]byte
 	ncon := con.ncon
 	var naddr *net.UDPAddr
@@ -95,11 +95,11 @@ func (con *UDPConn) ReadFromUDP(b [] byte) (n int, addr *UDPAddr, err error) {
 	if naddr == nil {
 		addr = nil
 	} else {
-		addr = &UDPAddr{naddr.IP, naddr.Port}
+		addr = &UDPAddr{IP: naddr.IP, Port: naddr.Port}
 	}
 	return n, addr, err
- }
-	
+}
+
 func (con *UDPConn) Write(b []byte) (int, error) {
 	ncon := con.ncon
 	if dropit(writeDropPercent) {
@@ -116,7 +116,7 @@ func (con *UDPConn) Write(b []byte) (int, error) {
 
 func (con *UDPConn) WriteToUDP(b []byte, addr *UDPAddr) (int, error) {
 	ncon := con.ncon
-	naddr := &net.UDPAddr{addr.IP, addr.Port}
+	naddr := &net.UDPAddr{IP: addr.IP, Port: addr.Port}
 	if dropit(writeDropPercent) {
 		lsplog.Vlogf(5, "UDP: DROPPING written packet of length %v\n", len(b))
 		// Make it look like write was successful
