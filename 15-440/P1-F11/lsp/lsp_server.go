@@ -5,22 +5,18 @@ import (
 	"fmt"
 	"github.com/kedebug/golang-programming/15-440/P1-F11/lsplog"
 	"github.com/kedebug/golang-programming/15-440/P1-F11/lspnet"
-	"time"
 )
 
 type server struct {
-	nextConnId      uint16
-	connMap         map[string]*lspConn
-	params          *LspParams
-	udpConn         *lspnet.UDPConn
-	udpAddr         *lspnet.UDPAddr
-	netReadChan     chan *udpPacket
-	appWriteChan    chan *LspMsg
-	closeChan       chan uint16
-	epochNotifyChan chan int
-	epochQuitChan   chan int
-	readQuitChan    chan int
-	serveQuitChan   chan int
+	nextConnId   uint16
+	connMap      map[string]*lspConn
+	params       *LspParams
+	udpConn      *lspnet.UDPConn
+	udpAddr      *lspnet.UDPAddr
+	netReadChan  chan *udpPacket
+	appWriteChan chan *LspMsg
+	closeChan    chan uint16
+	closeAllChan chan error
 }
 
 type udpPacket struct {
@@ -43,16 +39,19 @@ func newLspServer(port int, params *LspParams) (*LspServer, error) {
 	}
 	srv := &LspServer{
 		server{
-			nextConnId: 1,
-			params:     params,
-			connMap:    make(map[string]*lspConn),
-			udpConn:    udpconn,
-			udpAddr:    addr,
+			nextConnId:   1,
+			params:       params,
+			connMap:      make(map[string]*lspConn),
+			udpConn:      udpconn,
+			udpAddr:      addr,
+			netReadChan:  make(chan *udpPacket),
+			appWriteChan: make(chan *LspMsg),
+			closeChan:    make(chan uint16),
+			closeAllChan: make(chan error),
 		},
 	}
 	go srv.loopServe()
 	go srv.loopRead()
-	go epochTrigger(params.EpochMilliseconds, srv.epochNotifyChan, srv.epochQuitChan)
 	return srv, nil
 }
 
@@ -65,8 +64,18 @@ func (srv *LspServer) loopServe() {
 			conn := srv.getConnById(msg.ConnId)
 			conn.sendChan <- msg
 		case id := <-srv.closeChan:
+			err := make(chan error)
 			conn := srv.getConnById(id)
-			conn.closeChan <- 0
+			conn.closeChan <- err
+			<-err
+			delete(srv.connMap, conn.addr.String())
+		case <-srv.closeAllChan:
+			for _, v := range srv.connMap {
+				err := make(chan error)
+				v.closeChan <- err
+				<-err
+				delete(srv.connMap, v.addr.String())
+			}
 		}
 	}
 }
@@ -90,7 +99,7 @@ func (srv *LspServer) loopRead() {
 			continue
 		}
 		var msg LspMsg
-		err = json.Unmarshal(buf[0:], &msg)
+		err = json.Unmarshal(buf[0:n], &msg)
 		if err != nil {
 			lsplog.Vlogf(3, "Unmarshal error: %s\n", err.Error())
 			continue
@@ -99,35 +108,32 @@ func (srv *LspServer) loopRead() {
 			msg:  &msg,
 			addr: addr,
 		}
-		select {
-		case <-srv.readQuitChan:
-			lsplog.Vlogf(1, "server loop read quit\n")
-		case srv.netReadChan <- packet:
-			lsplog.Vlogf(5, "recieved udp packet\n")
-		}
+		srv.netReadChan <- packet
+		lsplog.Vlogf(5, "recieved udp packet\n")
 	}
 }
 
 func (srv *LspServer) handleUdpPacket(p *udpPacket) {
 	msg := p.msg
 	addr := p.addr
+	hostport := addr.String()
+	conn := srv.connMap[hostport]
 	switch msg.Type {
 	case MsgCONNECT:
-		hostport := addr.String()
-		conn := srv.connMap[hostport]
 		if conn != nil {
 			lsplog.Vlogf(5, "Duplicate connect request from: %s\n", hostport)
 			conn.sendChan <- conn.lastAck
 		}
-		id := srv.nextConnId
+		conn = newLspConn(srv, addr, srv.nextConnId)
 		srv.nextConnId++
-		conn = newLspConn(srv, addr, id)
-		conn.lastAck = genAckMsg(id, 0)
 		srv.connMap[hostport] = conn
 		go conn.serve()
-		conn.sendChan <- conn.lastAck
-	case MsgACK:
 	case MsgDATA:
+		conn.recvChan <- msg
+	case MsgACK:
+		conn.recvChan <- msg
+	default:
+		lsplog.Vlogf(5, "Invalid packet, hostport=%v\n", hostport)
 	}
 }
 
@@ -145,14 +151,18 @@ func (srv *LspServer) closeConn(id uint16) {
 	srv.closeChan <- id
 }
 
-func epochTrigger(delay int64, notify chan<- int, quit <-chan int) {
-	for {
-		timeout := time.After(time.Duration(delay) * time.Millisecond)
-		select {
-		case <-timeout:
-			notify <- 0
-		case <-quit:
-			return
-		}
+func (srv *LspServer) closeAll() {
+	srv.closeAllChan <- nil
+}
+
+func (srv *LspServer) writeToUDP(conn *lspConn, msg *LspMsg) {
+	result, err := json.Marshal(msg)
+	if err != nil {
+		lsplog.Vlogf(3, "Marshal failed: %s\n", err.Error())
+		return
+	}
+	_, err = srv.udpConn.WriteToUDP(result, conn.addr)
+	if err != nil {
+		lsplog.Vlogf(3, "WriteToUDP failed: %s\n", err.Error())
 	}
 }
