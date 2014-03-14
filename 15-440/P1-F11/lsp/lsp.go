@@ -9,7 +9,7 @@ package lsp
 
 type LspParams struct {
 	EpochLimit        int
-	EpochMilliseconds int
+	EpochMilliseconds int64
 }
 
 // API definition
