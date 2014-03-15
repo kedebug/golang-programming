@@ -17,6 +17,7 @@ type server struct {
 	appWriteChan   chan *LspMsg
 	closeChan      chan uint16
 	closeAllChan   chan error
+	stop           bool
 	removeConnChan chan uint16
 }
 
@@ -71,13 +72,18 @@ func (srv *LspServer) loopServe() {
 				conn.closeChan <- nil
 			}
 		case <-srv.closeAllChan:
+			srv.stop = true
 			for _, v := range srv.connMap {
 				v.closeChan <- nil
-				delete(srv.connMap, v.addr.String())
 			}
 		case id := <-srv.removeConnChan:
 			if conn := srv.getConnById(id); conn != nil {
 				delete(srv.connMap, conn.addr.String())
+				lsplog.Vlogf(2, "remove connection: %v\n", conn.addr.String())
+			}
+			if srv.stop && len(srv.connMap) == 0 {
+				lsplog.Vlogf(1, "serve stop running\n")
+				return
 			}
 		}
 	}
@@ -127,9 +133,10 @@ func (srv *LspServer) handleUdpPacket(p *udpPacket) {
 			lsplog.Vlogf(5, "Duplicate connect request from: %s\n", hostport)
 			conn.sendChan <- conn.lastAck
 		}
-		conn = newLspConn(srv, addr, srv.nextConnId)
+		conn = newLspConn(srv.params, srv.udpConn, addr, srv.nextConnId, srv.removeConnChan)
 		srv.nextConnId++
 		srv.connMap[hostport] = conn
+		conn.sendChan <- conn.lastAck
 		go conn.serve()
 	case MsgDATA:
 		conn.recvChan <- msg
@@ -156,16 +163,4 @@ func (srv *LspServer) closeConn(id uint16) {
 
 func (srv *LspServer) closeAll() {
 	srv.closeAllChan <- nil
-}
-
-func (srv *LspServer) writeToUDP(conn *lspConn, msg *LspMsg) {
-	result, err := json.Marshal(msg)
-	if err != nil {
-		lsplog.Vlogf(3, "Marshal failed: %s\n", err.Error())
-		return
-	}
-	_, err = srv.udpConn.WriteToUDP(result, conn.addr)
-	if err != nil {
-		lsplog.Vlogf(3, "WriteToUDP failed: %s\n", err.Error())
-	}
 }

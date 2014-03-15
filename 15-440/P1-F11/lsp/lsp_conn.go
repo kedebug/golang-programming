@@ -1,16 +1,24 @@
 package lsp
 
 import (
+	"encoding/json"
 	"github.com/kedebug/golang-programming/15-440/P1-F11/bufi"
 	"github.com/kedebug/golang-programming/15-440/P1-F11/lsplog"
 	"github.com/kedebug/golang-programming/15-440/P1-F11/lspnet"
 	"time"
 )
 
+const (
+	ClientSide = iota
+	ServerSide
+)
+
 type lspConn struct {
-	srv            *LspServer
+	params         *LspParams
+	udpConn        *lspnet.UDPConn
 	addr           *lspnet.UDPAddr
 	connId         uint16
+	removeChan     chan<- uint16 // chan from server
 	sendBuf        *bufi.Buf
 	recvBuf        *bufi.Buf
 	sendChan       chan *LspMsg
@@ -21,29 +29,39 @@ type lspConn struct {
 	nextRecvSeqNum byte
 	nextSendSeqNum byte
 	lastAck        *LspMsg
-	lastTime       time.Duration
+	lastTime       time.Time
+	whichSide      byte
 }
 
-func newLspConn(srv *LspServer, addr *lspnet.UDPAddr, id uint16) *lspConn {
+func newLspConn(params *LspParams, udpConn *lspnet.UDPConn,
+	addr *lspnet.UDPAddr, id uint16, removeChan chan<- uint16) *lspConn {
 	conn := &lspConn{
-		srv:            srv,
+		params:         params,
+		udpConn:        udpConn,
 		addr:           addr,
 		connId:         id,
+		removeChan:     removeChan,
 		sendBuf:        bufi.NewBuf(),
 		recvBuf:        bufi.NewBuf(),
 		sendChan:       make(chan *LspMsg),
 		recvChan:       make(chan *LspMsg),
 		closeChan:      make(chan error),
+		writeDone:      make(chan error),
 		nextRecvSeqNum: 1,
 		nextSendSeqNum: 1,
+		lastTime:       time.Now(),
+		lastAck:        genAckMsg(id, 0),
 	}
-	conn.lastAck = genAckMsg(id, 0)
-	conn.sendChan <- conn.lastAck
+	if id == 0 {
+		conn.whichSide = ClientSide
+	} else {
+		conn.whichSide = ServerSide
+	}
 	return conn
 }
 
 func (conn *lspConn) serve() {
-	params := conn.srv.params
+	params := conn.params
 	interval := time.Duration(params.EpochMilliseconds) * time.Millisecond
 	timeout := time.After(interval)
 	for {
@@ -55,14 +73,18 @@ func (conn *lspConn) serve() {
 				lsplog.Vlogf(2, "connection already closed, ignore send msg")
 			}
 		case msg := <-conn.recvChan:
+			conn.lastTime = time.Now()
 			conn.recieve(msg)
 		case <-conn.closeChan:
 			conn.closed = true
 		case <-timeout:
-			conn.epochTrigger()
-			timeout = time.After(interval)
+			if conn.epochTrigger() {
+				timeout = time.After(interval)
+			} else {
+				return
+			}
 		case <-conn.writeDone:
-			conn.srv.removeConnChan <- conn.connId
+			conn.removeChan <- conn.connId
 			return
 		}
 	}
@@ -70,15 +92,15 @@ func (conn *lspConn) serve() {
 
 func (conn *lspConn) send(msg *LspMsg) {
 	switch msg.Type {
+	case MsgCONNECT:
+		conn.sendBuf.Insert(msg)
 	case MsgACK:
 	case MsgDATA:
-		conn.sendBuf.Insert(msg)
-		b, _ := conn.sendBuf.Front()
-		msg = b.(*LspMsg)
 		msg.SeqNum = conn.nextSendSeqNum
 		conn.nextSendSeqNum++
+		conn.sendBuf.Insert(msg)
 	}
-	conn.srv.writeToUDP(conn, msg)
+	conn.udpWrite(msg)
 }
 
 func (conn *lspConn) recieve(msg *LspMsg) {
@@ -96,11 +118,16 @@ func (conn *lspConn) recieve(msg *LspMsg) {
 	case MsgACK:
 		if conn.sendBuf.Empty() {
 			lsplog.Vlogf(5, "ignore ack, nothing to send\n")
+			return
 		}
 		b, _ := conn.sendBuf.Front()
 		expect := b.(*LspMsg)
 		if msg.SeqNum == expect.SeqNum {
 			conn.sendBuf.Remove()
+			if msg.SeqNum == 0 {
+				conn.connId = msg.ConnId
+				lsplog.Vlogf(2, "connection confirmed, ConnId=%v\n", msg.ConnId)
+			}
 		} else {
 			lsplog.Vlogf(5, "ignore ack, ConnId=%v, seqnum=%v, expected=%v\n",
 				conn.connId, msg.SeqNum, expect.SeqNum)
@@ -111,16 +138,42 @@ func (conn *lspConn) recieve(msg *LspMsg) {
 	}
 }
 
-func (conn *lspConn) epochTrigger() {
+func (conn *lspConn) epochTrigger() bool {
 	if !conn.sendBuf.Empty() {
 		b, _ := conn.sendBuf.Front()
 		msg := b.(*LspMsg)
 		if msg.SeqNum != 0 {
 			// rewrite message
-			conn.srv.writeToUDP(conn, msg)
+			conn.udpWrite(msg)
 		}
 	}
 	if conn.lastAck != nil {
-		conn.srv.writeToUDP(conn, conn.lastAck)
+		conn.udpWrite(conn.lastAck)
+	}
+	params := conn.params
+	delay := time.Now().Sub(conn.lastTime)
+	allowed := time.Duration(params.EpochMilliseconds*params.EpochLimit) * time.Millisecond
+	if delay >= allowed {
+		// remove connection
+		conn.removeChan <- conn.connId
+		return false
+	}
+	return true
+}
+
+func (conn *lspConn) udpWrite(msg *LspMsg) {
+	result, err := json.Marshal(msg)
+	if err != nil {
+		lsplog.Vlogf(3, "Marshal failed: %s\n", err.Error())
+		return
+	}
+	switch conn.whichSide {
+	case ClientSide:
+		_, err = conn.udpConn.Write(result)
+	case ServerSide:
+		_, err = conn.udpConn.WriteToUDP(result, conn.addr)
+	}
+	if err != nil {
+		lsplog.Vlogf(3, "udpWrite failed: %s\n", err.Error())
 	}
 }
