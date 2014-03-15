@@ -8,15 +8,16 @@ import (
 )
 
 type server struct {
-	nextConnId   uint16
-	connMap      map[string]*lspConn
-	params       *LspParams
-	udpConn      *lspnet.UDPConn
-	udpAddr      *lspnet.UDPAddr
-	netReadChan  chan *udpPacket
-	appWriteChan chan *LspMsg
-	closeChan    chan uint16
-	closeAllChan chan error
+	nextConnId     uint16
+	connMap        map[string]*lspConn
+	params         *LspParams
+	udpConn        *lspnet.UDPConn
+	udpAddr        *lspnet.UDPAddr
+	netReadChan    chan *udpPacket
+	appWriteChan   chan *LspMsg
+	closeChan      chan uint16
+	closeAllChan   chan error
+	removeConnChan chan uint16
 }
 
 type udpPacket struct {
@@ -39,15 +40,16 @@ func newLspServer(port int, params *LspParams) (*LspServer, error) {
 	}
 	srv := &LspServer{
 		server{
-			nextConnId:   1,
-			params:       params,
-			connMap:      make(map[string]*lspConn),
-			udpConn:      udpconn,
-			udpAddr:      addr,
-			netReadChan:  make(chan *udpPacket),
-			appWriteChan: make(chan *LspMsg),
-			closeChan:    make(chan uint16),
-			closeAllChan: make(chan error),
+			nextConnId:     1,
+			params:         params,
+			connMap:        make(map[string]*lspConn),
+			udpConn:        udpconn,
+			udpAddr:        addr,
+			netReadChan:    make(chan *udpPacket),
+			appWriteChan:   make(chan *LspMsg),
+			closeChan:      make(chan uint16),
+			closeAllChan:   make(chan error),
+			removeConnChan: make(chan uint16),
 		},
 	}
 	go srv.loopServe()
@@ -61,20 +63,21 @@ func (srv *LspServer) loopServe() {
 		case p := <-srv.netReadChan:
 			srv.handleUdpPacket(p)
 		case msg := <-srv.appWriteChan:
-			conn := srv.getConnById(msg.ConnId)
-			conn.sendChan <- msg
+			if conn := srv.getConnById(msg.ConnId); conn != nil {
+				conn.sendChan <- msg
+			}
 		case id := <-srv.closeChan:
-			err := make(chan error)
-			conn := srv.getConnById(id)
-			conn.closeChan <- err
-			<-err
-			delete(srv.connMap, conn.addr.String())
+			if conn := srv.getConnById(id); conn != nil {
+				conn.closeChan <- nil
+			}
 		case <-srv.closeAllChan:
 			for _, v := range srv.connMap {
-				err := make(chan error)
-				v.closeChan <- err
-				<-err
+				v.closeChan <- nil
 				delete(srv.connMap, v.addr.String())
+			}
+		case id := <-srv.removeConnChan:
+			if conn := srv.getConnById(id); conn != nil {
+				delete(srv.connMap, conn.addr.String())
 			}
 		}
 	}

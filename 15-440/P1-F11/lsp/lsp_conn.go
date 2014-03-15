@@ -15,7 +15,9 @@ type lspConn struct {
 	recvBuf        *bufi.Buf
 	sendChan       chan *LspMsg
 	recvChan       chan *LspMsg
-	closeChan      chan chan error
+	closeChan      chan error
+	writeDone      chan error
+	closed         bool
 	nextRecvSeqNum byte
 	nextSendSeqNum byte
 	lastAck        *LspMsg
@@ -31,7 +33,7 @@ func newLspConn(srv *LspServer, addr *lspnet.UDPAddr, id uint16) *lspConn {
 		recvBuf:        bufi.NewBuf(),
 		sendChan:       make(chan *LspMsg),
 		recvChan:       make(chan *LspMsg),
-		closeChan:      make(chan chan error),
+		closeChan:      make(chan error),
 		nextRecvSeqNum: 1,
 		nextSendSeqNum: 1,
 	}
@@ -47,15 +49,21 @@ func (conn *lspConn) serve() {
 	for {
 		select {
 		case msg := <-conn.sendChan:
-			conn.send(msg)
+			if !conn.closed {
+				conn.send(msg)
+			} else {
+				lsplog.Vlogf(2, "connection already closed, ignore send msg")
+			}
 		case msg := <-conn.recvChan:
 			conn.recieve(msg)
-		case err := <-conn.closeChan:
-			conn.closeConn(err)
-			return
+		case <-conn.closeChan:
+			conn.closed = true
 		case <-timeout:
 			conn.epochTrigger()
 			timeout = time.After(interval)
+		case <-conn.writeDone:
+			conn.srv.removeConnChan <- conn.connId
+			return
 		}
 	}
 }
@@ -97,6 +105,9 @@ func (conn *lspConn) recieve(msg *LspMsg) {
 			lsplog.Vlogf(5, "ignore ack, ConnId=%v, seqnum=%v, expected=%v\n",
 				conn.connId, msg.SeqNum, expect.SeqNum)
 		}
+		if conn.sendBuf.Empty() && conn.closed {
+			conn.writeDone <- nil
+		}
 	}
 }
 
@@ -105,14 +116,11 @@ func (conn *lspConn) epochTrigger() {
 		b, _ := conn.sendBuf.Front()
 		msg := b.(*LspMsg)
 		if msg.SeqNum != 0 {
-			// resend message
+			// rewrite message
 			conn.srv.writeToUDP(conn, msg)
 		}
 	}
 	if conn.lastAck != nil {
 		conn.srv.writeToUDP(conn, conn.lastAck)
 	}
-}
-
-func (conn *lspConn) closeConn(err chan error) {
 }
