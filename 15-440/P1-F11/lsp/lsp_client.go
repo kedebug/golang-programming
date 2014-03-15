@@ -12,6 +12,7 @@ type client struct {
 	conn           *lspConn
 	netReadChan    chan *LspMsg
 	appWriteChan   chan *LspMsg
+	appReadChan    chan *LspMsg
 	removeConnChan chan uint16
 	closeChan      chan error
 }
@@ -25,11 +26,15 @@ func newLspClient(hostport string, params *LspParams) (*LspClient, error) {
 		return nil, err
 	}
 	udpConn, err := lspnet.DialUDP("udp", nil, addr)
-	if lsplog.CheckReport(1, err) {
+	if err != nil {
+		lsplog.Vlogf(1, "[client] connect to %v failed: %v\n", addr.String(), err)
 		return nil, err
+	} else {
+		lsplog.Vlogf(1, "[client] connected to %v\n", addr.String())
 	}
 	removeChan := make(chan uint16)
-	conn := newLspConn(params, udpConn, addr, 0, removeChan)
+	appReadChan := make(chan *LspMsg)
+	conn := newLspConn(params, udpConn, addr, 0, appReadChan, removeChan)
 	cli := &LspClient{
 		client{
 			udpConn:        udpConn,
@@ -37,6 +42,7 @@ func newLspClient(hostport string, params *LspParams) (*LspClient, error) {
 			conn:           conn,
 			netReadChan:    make(chan *LspMsg),
 			appWriteChan:   make(chan *LspMsg),
+			appReadChan:    appReadChan,
 			removeConnChan: removeChan,
 			closeChan:      make(chan error),
 		},
@@ -54,7 +60,7 @@ func (cli *LspClient) loopServe() {
 		case msg := <-cli.appWriteChan:
 			cli.conn.sendChan <- msg
 		case <-cli.removeConnChan:
-			lsplog.Vlogf(1, "client removed, exit\n")
+			lsplog.Vlogf(1, "[client] exit\n")
 			return
 		case <-cli.closeChan:
 			cli.closeChan <- nil
@@ -68,25 +74,39 @@ func (cli *LspClient) loopRead() {
 	for {
 		n, _, err := conn.ReadFromUDP(buf[0:])
 		if err != nil {
-			lsplog.Vlogf(3, "ReadFromUDP error: %s\n", err.Error())
+			lsplog.Vlogf(3, "[client] ReadFromUDP error: %s\n", err.Error())
 			continue
 		}
 		var msg LspMsg
 		err = json.Unmarshal(buf[0:n], &msg)
 		if err != nil {
-			lsplog.Vlogf(3, "Unmarshal error: %s\n", err.Error())
+			lsplog.Vlogf(3, "[client] Unmarshal error: %s\n", err.Error())
 			continue
 		}
 		cli.netReadChan <- &msg
-		lsplog.Vlogf(5, "recieved udp packet\n")
+		lsplog.Vlogf(5, "[client] recieved udp packet\n")
 	}
 }
 
 func (cli *LspClient) connId() uint16 {
 	if cli.conn.connId == 0 {
-		lsplog.Vlogf(5, "connection not established\n")
+		lsplog.Vlogf(5, "[client] connection not established\n")
 	}
 	return cli.conn.connId
+}
+
+func (cli *LspClient) read() []byte {
+	msg := <-cli.appReadChan
+	if msg.Type == MsgDATA {
+		return msg.Payload
+	}
+	return nil
+
+}
+
+func (cli *LspClient) write(payload []byte) {
+	msg := genDataMsg(cli.conn.connId, 0, payload)
+	cli.appWriteChan <- msg
 }
 
 func (cli *LspClient) closeConn() {

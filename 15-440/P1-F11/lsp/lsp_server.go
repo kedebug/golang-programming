@@ -15,8 +15,9 @@ type server struct {
 	udpAddr        *lspnet.UDPAddr
 	netReadChan    chan *udpPacket
 	appWriteChan   chan *LspMsg
+	appReadChan    chan *LspMsg
 	closeChan      chan uint16
-	closeAllChan   chan error
+	closeAllChan   chan chan error
 	stop           bool
 	removeConnChan chan uint16
 }
@@ -30,7 +31,7 @@ func newLspServer(port int, params *LspParams) (*LspServer, error) {
 	if params == nil {
 		params = &LspParams{5, 2000}
 	}
-	hostport := fmt.Sprintf(":%v", port)
+	hostport := fmt.Sprintf("localhost:%v", port)
 	addr, err := lspnet.ResolveUDPAddr("udp", hostport)
 	if lsplog.CheckReport(1, err) {
 		return nil, err
@@ -38,6 +39,8 @@ func newLspServer(port int, params *LspParams) (*LspServer, error) {
 	udpconn, err := lspnet.ListenUDP("udp", addr)
 	if lsplog.CheckReport(1, err) {
 		return nil, err
+	} else {
+		lsplog.Vlogf(1, "[server] listen on %v\n", addr.String())
 	}
 	srv := &LspServer{
 		server{
@@ -48,8 +51,9 @@ func newLspServer(port int, params *LspParams) (*LspServer, error) {
 			udpAddr:        addr,
 			netReadChan:    make(chan *udpPacket),
 			appWriteChan:   make(chan *LspMsg),
+			appReadChan:    make(chan *LspMsg),
 			closeChan:      make(chan uint16),
-			closeAllChan:   make(chan error),
+			closeAllChan:   make(chan chan error),
 			removeConnChan: make(chan uint16),
 		},
 	}
@@ -59,6 +63,7 @@ func newLspServer(port int, params *LspParams) (*LspServer, error) {
 }
 
 func (srv *LspServer) loopServe() {
+	var closeAllReply chan error
 	for {
 		select {
 		case p := <-srv.netReadChan:
@@ -71,7 +76,7 @@ func (srv *LspServer) loopServe() {
 			if conn := srv.getConnById(id); conn != nil {
 				conn.closeChan <- nil
 			}
-		case <-srv.closeAllChan:
+		case closeAllReply = <-srv.closeAllChan:
 			srv.stop = true
 			for _, v := range srv.connMap {
 				v.closeChan <- nil
@@ -79,10 +84,13 @@ func (srv *LspServer) loopServe() {
 		case id := <-srv.removeConnChan:
 			if conn := srv.getConnById(id); conn != nil {
 				delete(srv.connMap, conn.addr.String())
-				lsplog.Vlogf(2, "remove connection: %v\n", conn.addr.String())
+				lsplog.Vlogf(2, "[server] remove connection: %v\n", conn.addr.String())
 			}
 			if srv.stop && len(srv.connMap) == 0 {
-				lsplog.Vlogf(1, "serve stop running\n")
+				lsplog.Vlogf(1, "[server] serve stop running\n")
+				if closeAllReply != nil {
+					closeAllReply <- nil
+				}
 				return
 			}
 		}
@@ -104,13 +112,13 @@ func (srv *LspServer) loopRead() {
 	for {
 		n, addr, err := conn.ReadFromUDP(buf[0:])
 		if err != nil {
-			lsplog.Vlogf(3, "ReadFromUDP error: %s\n", err.Error())
+			lsplog.Vlogf(3, "[server] ReadFromUDP error: %s\n", err.Error())
 			continue
 		}
 		var msg LspMsg
 		err = json.Unmarshal(buf[0:n], &msg)
 		if err != nil {
-			lsplog.Vlogf(3, "Unmarshal error: %s\n", err.Error())
+			lsplog.Vlogf(3, "[server] Unmarshal error: %s\n", err.Error())
 			continue
 		}
 		packet := &udpPacket{
@@ -118,7 +126,7 @@ func (srv *LspServer) loopRead() {
 			addr: addr,
 		}
 		srv.netReadChan <- packet
-		lsplog.Vlogf(5, "recieved udp packet\n")
+		lsplog.Vlogf(5, "[server] received udp packet\n")
 	}
 }
 
@@ -130,24 +138,27 @@ func (srv *LspServer) handleUdpPacket(p *udpPacket) {
 	switch msg.Type {
 	case MsgCONNECT:
 		if conn != nil {
-			lsplog.Vlogf(5, "Duplicate connect request from: %s\n", hostport)
+			lsplog.Vlogf(5, "[server] Duplicate connect request from: %s\n", hostport)
 			conn.sendChan <- conn.lastAck
 		}
-		conn = newLspConn(srv.params, srv.udpConn, addr, srv.nextConnId, srv.removeConnChan)
+		conn = newLspConn(srv.params, srv.udpConn, addr,
+			srv.nextConnId, srv.appReadChan, srv.removeConnChan)
 		srv.nextConnId++
 		srv.connMap[hostport] = conn
-		conn.sendChan <- conn.lastAck
-		go conn.serve()
 	case MsgDATA:
 		conn.recvChan <- msg
 	case MsgACK:
 		conn.recvChan <- msg
 	default:
-		lsplog.Vlogf(5, "Invalid packet, hostport=%v\n", hostport)
+		lsplog.Vlogf(5, "[server] Invalid packet, hostport=%v\n", hostport)
 	}
 }
 
 func (srv *LspServer) read() (uint16, []byte, error) {
+	msg := <-srv.appReadChan
+	if msg.Type == MsgDATA {
+		return msg.ConnId, msg.Payload, nil
+	}
 	return 0, nil, nil
 }
 
@@ -162,5 +173,8 @@ func (srv *LspServer) closeConn(id uint16) {
 }
 
 func (srv *LspServer) closeAll() {
-	srv.closeAllChan <- nil
+	err := make(chan error)
+	srv.closeAllChan <- err
+	<-err
+	lsplog.Vlogf(1, "[server] all connection closed\n")
 }

@@ -4,15 +4,14 @@ package lsplog
 
 import (
 	"log"
-	"strings"
 	"os"
+	"strings"
 )
-
 
 // The Vlog function provides a means to include print statements
 // that are activated according to different levels of verbosity.
 // That way, you can set the verbosity level to 0 to eliminate any
-// logging, but set to higher levels for debugging.  
+// logging, but set to higher levels for debugging.
 
 var verbosity int = 0
 

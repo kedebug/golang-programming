@@ -108,7 +108,7 @@ func (con *UDPConn) Write(b []byte) (int, error) {
 		return len(b), nil
 	} else {
 		n, err := ncon.Write(b)
-		lsplog.Vlogf(5, "UDP: Wrote packet of length %v\v", n)
+		lsplog.Vlogf(5, "UDP: Wrote packet of length %v\n", n)
 		return n, err
 	}
 	return 0, nil

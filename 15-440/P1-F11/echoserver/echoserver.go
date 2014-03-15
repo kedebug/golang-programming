@@ -5,38 +5,36 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/kedebug/golang-programming/15-440/P1-F11/lsp"
+	"github.com/kedebug/golang-programming/15-440/P1-F11/lsplog"
+	"github.com/kedebug/golang-programming/15-440/P1-F11/lspnet"
 	"os"
-	// When you are ready to test your own implementation of LSP, change
-	// the following to "../contrib/lsp"
-	"../official/lsp"
+	"strings"
 )
 
-/* $begin lsp-echoserver */
 func runserver(srv *lsp.LspServer) {
 	for {
 		// Read from client
-		id, payload := srv.Read()
-		if payload == nil {
-			fmt.Printf("Connection %d has died\n", id)
+		id, payload, rerr := srv.Read()
+		if rerr != nil {
+			fmt.Printf("Connection %d has died.  Error message %s\n", id, rerr.Error())
 		} else {
-			/* $end lsp-echoserver */
 			s := string(payload)
-			fmt.Printf("Connection %d.  Received '%s'\n", id, s)
-			/* $begin lsp-echoserver */
+			lsplog.Vlogf(6, "Connection %d.  Received '%s'\n", id, s)
+			payload = []byte(strings.ToUpper(s))
 			// Echo back to client
 			srv.Write(id, payload)
 		}
 	}
 }
 
-/* $end lsp-echoserver */
-
 func main() {
 	var ihelp *bool = flag.Bool("h", false, "Print help information")
 	var iport *int = flag.Int("p", 6666, "Port number")
-	var iverb *int = flag.Int("v", 1, "Verbosity (0-6)")
-	var idrop *float64 = flag.Float64("d", 0.0, "Specify packet drop rate")
-	var elength *float64 = flag.Float64("e", 2.0, "Epoch duration (secs.)")
+	var iverb *int = flag.Int("v", 5, "Verbosity (0-6)")
+	var idrop *int = flag.Int("r", 0, "Network packet drop percentage")
+	var elim *int = flag.Int("k", 5, "Epoch limit")
+	var ems *int = flag.Int("d", 2000, "Epoch duration (millisecconds)")
 	flag.Parse()
 	if *ihelp {
 		flag.Usage()
@@ -50,10 +48,15 @@ func main() {
 			os.Exit(0)
 		}
 	}
-	lsp.SetVerbose(*iverb)
-	lsp.SetDropRate(float32(*idrop))
-	lsp.SetEpochLength(float32(*elength))
+	params := &lsp.LspParams{*elim, *ems}
+
+	lsplog.SetVerbose(*iverb)
+	lspnet.SetWriteDropPercent(*idrop)
 	fmt.Printf("Establishing server on port %d\n", port)
-	srv := lsp.NewLspServer(port)
-	runserver(srv)
+	srv, err := lsp.NewLspServer(port, params)
+	if err != nil {
+		fmt.Printf("... failed.  Error message %s\n", err.Error())
+	} else {
+		runserver(srv)
+	}
 }
