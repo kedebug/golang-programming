@@ -139,7 +139,7 @@ func (srv *LspServer) handleUdpPacket(p *udpPacket) {
 	case MsgCONNECT:
 		if conn != nil {
 			lsplog.Vlogf(5, "[server] Duplicate connect request from: %s\n", hostport)
-			conn.sendChan <- conn.lastAck
+			return
 		}
 		conn = newLspConn(srv.params, srv.udpConn, addr,
 			srv.nextConnId, srv.appReadChan, srv.removeConnChan)

@@ -54,14 +54,14 @@ func newLspConn(params *LspParams, udpConn *lspnet.UDPConn, addr *lspnet.UDPAddr
 		lastTime:       time.Now(),
 		lastAck:        genAckMsg(id, 0),
 	}
-	if id == 0 {
-		conn.sendChan <- genConnMsg(0)
-		conn.whichSide = ClientSide
-	} else {
-		conn.sendChan <- conn.lastAck
-		conn.whichSide = ServerSide
-	}
 	go conn.serve()
+	if id == 0 {
+		conn.whichSide = ClientSide
+		conn.sendChan <- genConnMsg(0)
+	} else {
+		conn.whichSide = ServerSide
+		conn.sendChan <- conn.lastAck
+	}
 	return conn
 }
 
@@ -105,37 +105,36 @@ func (conn *lspConn) serve() {
 }
 
 func (conn *lspConn) send(msg *LspMsg) {
-	lsplog.Vlogf(3, "[conn] send data, connId=%v, seqnum=%v, payload=%s\n",
-		conn.connId, msg.SeqNum, msg.Payload)
 	switch msg.Type {
 	case MsgCONNECT:
 		conn.sendBuf.Insert(msg)
-	case MsgACK:
 	case MsgDATA:
 		msg.SeqNum = conn.nextSendSeqNum
 		conn.nextSendSeqNum++
 		conn.sendBuf.Insert(msg)
+		b, _ := conn.sendBuf.Front()
+		msg = b.(*LspMsg)
+	case MsgACK:
 	}
 	conn.udpWrite(msg)
 }
 
 func (conn *lspConn) receive(msg *LspMsg) {
-	lsplog.Vlogf(3, "[conn] recv data, connId=%v, seqnum=%v, payload=%s\n",
-		conn.connId, msg.SeqNum, msg.Payload)
 	switch msg.Type {
 	case MsgDATA:
 		if msg.SeqNum == conn.nextRecvSeqNum {
 			conn.recvBuf.Insert(msg)
 			conn.nextRecvSeqNum++
 			conn.lastAck = genAckMsg(conn.connId, msg.SeqNum)
-			conn.send(conn.lastAck)
+			// conn.send(conn.lastAck)
 		} else {
-			lsplog.Vlogf(5, "[conn] ignore data, connId=%v, seqnum=%v, expected=%v\n",
+			lsplog.Vlogf(4, "[conn] ignore data, connId=%v, seqnum=%v, expected=%v\n",
 				conn.connId, msg.SeqNum, conn.nextRecvSeqNum)
 		}
+		conn.udpWrite(conn.lastAck)
 	case MsgACK:
 		if conn.sendBuf.Empty() {
-			lsplog.Vlogf(5, "[conn] ignore ack, nothing to send\n")
+			lsplog.Vlogf(4, "[conn] ignore ack, nothing to send\n")
 			return
 		}
 		b, _ := conn.sendBuf.Front()
@@ -144,10 +143,11 @@ func (conn *lspConn) receive(msg *LspMsg) {
 			conn.sendBuf.Remove()
 			if msg.SeqNum == 0 {
 				conn.connId = msg.ConnId
-				lsplog.Vlogf(2, "[conn] connection confirmed, ConnId=%v\n", msg.ConnId)
+				lsplog.Vlogf(2, "[conn] connection confirmed, ConnId=%v\n", conn.connId)
 			}
 		} else {
-			lsplog.Vlogf(5, "[conn] ignore ack, ConnId=%v, seqnum=%v, expected=%v\n",
+			conn.udpWrite(expect)
+			lsplog.Vlogf(4, "[conn] ignore ack, ConnId=%v, seqnum=%v, expected=%v\n",
 				conn.connId, msg.SeqNum, expect.SeqNum)
 		}
 		if conn.sendBuf.Empty() && conn.closed {
@@ -160,10 +160,8 @@ func (conn *lspConn) epochTrigger() bool {
 	if !conn.sendBuf.Empty() {
 		b, _ := conn.sendBuf.Front()
 		msg := b.(*LspMsg)
-		if msg.SeqNum != 0 {
-			// rewrite message
-			conn.udpWrite(msg)
-		}
+		// rewrite message
+		conn.udpWrite(msg)
 	}
 	if conn.lastAck != nil {
 		conn.udpWrite(conn.lastAck)

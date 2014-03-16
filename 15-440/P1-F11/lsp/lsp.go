@@ -60,8 +60,8 @@ func (cli *LspClient) Read() []byte {
 }
 
 // Client Write.  Should not send nil
-func (cli *LspClient) Write(payload []byte) {
-	cli.write(payload)
+func (cli *LspClient) Write(payload []byte) error {
+	return cli.write(payload)
 }
 
 // Close connection.
@@ -86,8 +86,8 @@ func (srv *LspServer) Read() (uint16, []byte, error) {
 }
 
 // Server Write.  Should not send nil
-func (srv *LspServer) Write(id uint16, payload []byte) {
-	srv.Write(id, payload)
+func (srv *LspServer) Write(id uint16, payload []byte) error {
+	return srv.write(id, payload)
 }
 
 // Close connection.

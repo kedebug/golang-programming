@@ -13,6 +13,7 @@ type client struct {
 	netReadChan    chan *LspMsg
 	appWriteChan   chan *LspMsg
 	appReadChan    chan *LspMsg
+	connIdChan     chan uint16
 	removeConnChan chan uint16
 	closeChan      chan error
 }
@@ -43,6 +44,7 @@ func newLspClient(hostport string, params *LspParams) (*LspClient, error) {
 			netReadChan:    make(chan *LspMsg),
 			appWriteChan:   make(chan *LspMsg),
 			appReadChan:    appReadChan,
+			connIdChan:     make(chan uint16, 1),
 			removeConnChan: removeChan,
 			closeChan:      make(chan error),
 		},
@@ -53,10 +55,15 @@ func newLspClient(hostport string, params *LspParams) (*LspClient, error) {
 }
 
 func (cli *LspClient) loopServe() {
+	var connid uint16 = 0
 	for {
 		select {
 		case msg := <-cli.netReadChan:
 			cli.conn.recvChan <- msg
+			if connid == 0 {
+				connid = msg.ConnId
+				cli.connIdChan <- connid
+			}
 		case msg := <-cli.appWriteChan:
 			cli.conn.sendChan <- msg
 		case <-cli.removeConnChan:
@@ -84,13 +91,15 @@ func (cli *LspClient) loopRead() {
 			continue
 		}
 		cli.netReadChan <- &msg
-		lsplog.Vlogf(5, "[client] recieved udp packet\n")
+		lsplog.Vlogf(5, "[client] received udp packet\n")
 	}
 }
 
 func (cli *LspClient) connId() uint16 {
 	if cli.conn.connId == 0 {
-		lsplog.Vlogf(5, "[client] connection not established\n")
+		id := <-cli.connIdChan
+		cli.connIdChan <- id
+		return id
 	}
 	return cli.conn.connId
 }
@@ -104,9 +113,10 @@ func (cli *LspClient) read() []byte {
 
 }
 
-func (cli *LspClient) write(payload []byte) {
+func (cli *LspClient) write(payload []byte) error {
 	msg := genDataMsg(cli.conn.connId, 0, payload)
 	cli.appWriteChan <- msg
+	return nil
 }
 
 func (cli *LspClient) closeConn() {
