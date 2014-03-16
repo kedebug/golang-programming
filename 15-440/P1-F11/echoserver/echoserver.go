@@ -31,7 +31,7 @@ func runserver(srv *lsp.LspServer) {
 func main() {
 	var ihelp *bool = flag.Bool("h", false, "Print help information")
 	var iport *int = flag.Int("p", 6666, "Port number")
-	var iverb *int = flag.Int("v", 5, "Verbosity (0-6)")
+	var iverb *int = flag.Int("v", 4, "Verbosity (0-6)")
 	var idrop *int = flag.Int("r", 0, "Network packet drop percentage")
 	var elim *int = flag.Int("k", 5, "Epoch limit")
 	var ems *int = flag.Int("d", 2000, "Epoch duration (millisecconds)")

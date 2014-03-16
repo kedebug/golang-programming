@@ -27,10 +27,8 @@ func runclient(cli *lsp.LspClient) {
 		// Read from server
 		payload := cli.Read()
 		if payload != nil {
-			fmt.Printf("Lost contact with server on read. Error message\n")
-			return
+			fmt.Printf("SRV-CLI: [%s]\n", string(payload))
 		}
-		fmt.Printf("SRV-CLI: [%s]\n", string(payload))
 	}
 	fmt.Printf("Exiting\n")
 	cli.Close()
@@ -40,7 +38,7 @@ func main() {
 	var ihelp *bool = flag.Bool("h", false, "Show help information")
 	var iport *int = flag.Int("p", 6666, "Port number")
 	var ihost *string = flag.String("H", "localhost", "Host address")
-	var iverb *int = flag.Int("v", 5, "Verbosity (0-6)")
+	var iverb *int = flag.Int("v", 4, "Verbosity (0-6)")
 	var irdrop *int = flag.Int("r", 0, "Network read packet drop percentage")
 	var iwdrop *int = flag.Int("w", 0, "Network write packet drop percentage")
 	var elim *int = flag.Int("k", 5, "Epoch limit")
