@@ -145,6 +145,11 @@ func (conn *lspConn) receive(msg *LspMsg) {
 				conn.connId = msg.ConnId
 				lsplog.Vlogf(2, "[conn] connection confirmed, ConnId=%v\n", conn.connId)
 			}
+			if !conn.sendBuf.Empty() {
+				r, _ := conn.sendBuf.Front()
+				m := r.(*LspMsg)
+				conn.udpWrite(m)
+			}
 		} else {
 			conn.udpWrite(expect)
 			lsplog.Vlogf(4, "[conn] ignore ack, ConnId=%v, seqnum=%v, expected=%v\n",
