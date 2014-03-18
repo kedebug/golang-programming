@@ -7,6 +7,10 @@
 
 package lsp
 
+import (
+	"github.com/kedebug/golang-programming/15-440/P1-F11/lsplog"
+)
+
 type LspParams struct {
 	EpochLimit        int
 	EpochMilliseconds int
@@ -38,24 +42,31 @@ type LspClient struct {
 // Client operations
 
 func NewLspClient(hostport string, params *LspParams) (*LspClient, error) {
-	return nil, nil
+	cli, err := newLspClient(hostport, params)
+	if err != nil {
+		lsplog.Vlogf(1, "[client] create failure: %v", err)
+		return nil, err
+	}
+	return cli, nil
 }
 
 func (cli *LspClient) ConnId() uint16 {
-	return 0
+	return cli.connId()
 }
 
 // Client Read.  Returns nil when connection lost
 func (cli *LspClient) Read() []byte {
-	return nil
+	return cli.read()
 }
 
 // Client Write.  Should not send nil
-func (cli *LspClient) Write(payload []byte) {
+func (cli *LspClient) Write(payload []byte) error {
+	return cli.write(payload)
 }
 
 // Close connection.
 func (cli *LspClient) Close() {
+	cli.closeConn()
 }
 
 // Server API
@@ -71,16 +82,19 @@ func NewLspServer(port int, params *LspParams) (*LspServer, error) {
 
 // Server Read.  Returns nil when connection lost
 func (srv *LspServer) Read() (uint16, []byte, error) {
-	return 0, nil, nil
+	return srv.read()
 }
 
 // Server Write.  Should not send nil
-func (srv *LspServer) Write(id uint16, payload []byte) {
+func (srv *LspServer) Write(id uint16, payload []byte) error {
+	return srv.write(id, payload)
 }
 
 // Close connection.
-func (srv *LspServer) Close(id int) {
+func (srv *LspServer) Close(id uint16) {
+	srv.closeConn(id)
 }
 
 func (srv *LspServer) CloseAll() {
+	srv.closeAll()
 }
