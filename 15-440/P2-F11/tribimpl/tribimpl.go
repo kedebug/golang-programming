@@ -1,12 +1,14 @@
 package tribimpl
 
 import (
+	"goproc/15-440/P2-F11/libstore"
 	"goproc/15-440/P2-F11/lsplog"
 	tp "goproc/15-440/P2-F11/tribproto"
 )
 
 type Tribserver struct {
-	id int
+	store *libstore.Libstore
+	id    int
 }
 
 func NewTribserver(master, myhostport string) *Tribserver {
