@@ -1,10 +1,10 @@
 package tribclient
 
 import (
+	"P2-f12/official/tribproto"
 	"log"
 	"net"
 	"net/rpc"
-	"P2-f12/official/tribproto"
 )
 
 // This is official code provided as part of the 15-440 project handout.

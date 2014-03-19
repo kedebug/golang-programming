@@ -20,6 +20,9 @@ func NewCacheRPC(cc CacherInterface) *CacheRPC {
 	return &CacheRPC{cc}
 }
 
-func (crpc *CacheRPC) RevokeLease(args *storageproto.RevokeLeaseArgs, reply *storageproto.RevokeLeaseReply) error {
-        return crpc.c.RevokeLease(args, reply)
+func (crpc *CacheRPC) RevokeLease(
+	args *storageproto.RevokeLeaseArgs,
+	reply *storageproto.RevokeLeaseReply) error {
+
+	return crpc.c.RevokeLease(args, reply)
 }
