@@ -59,8 +59,8 @@ func (s *URLStore) Get(key, url *string) error {
 
 func (s *URLStore) Set(key, url *string) error {
 	defer statSend("store set")
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if _, present := s.urls[*key]; present {
 		return errors.New("key already exists")
 	}
