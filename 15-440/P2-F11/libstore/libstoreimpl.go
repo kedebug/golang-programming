@@ -1,5 +1,9 @@
 package libstore
 
+import (
+	sp "goproc/15-440/P2-F11/storageproto"
+)
+
 type Libstore struct {
 }
 
@@ -25,4 +29,8 @@ func (ls *Libstore) iRemoveFromList(key, removeitem string) error {
 
 func (ls *Libstore) iAppendToList(key, newitem string) error {
 	return nil
+}
+
+func (ls *Libstore) RevokeLease(args *sp.RevokeLeaseArgs, reply *sp.RevokeLeaseReply) error {
+
 }
