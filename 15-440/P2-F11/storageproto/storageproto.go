@@ -19,30 +19,30 @@ const (
 )
 
 type LeaseStruct struct {
-	Granted bool
+	Granted      bool
 	ValidSeconds int
 }
 
 type GetArgs struct {
-	Key string
-	WantLease bool
+	Key         string
+	WantLease   bool
 	LeaseClient string // host:port of client that wants lease, for callback
 }
 
 type GetReply struct {
 	Status int
-	Value string
-	Lease LeaseStruct
+	Value  string
+	Lease  LeaseStruct
 }
 
 type GetListReply struct {
 	Status int
-	Value []string
-	Lease LeaseStruct
+	Value  []string
+	Lease  LeaseStruct
 }
 
 type PutArgs struct {
-	Key string
+	Key   string
 	Value string
 }
 
@@ -52,7 +52,7 @@ type PutReply struct {
 
 type Node struct {
 	HostPort string
-	NodeID uint32
+	NodeID   uint32
 }
 
 type RegisterArgs struct {
@@ -61,7 +61,7 @@ type RegisterArgs struct {
 
 // RegisterReply is sent in response to both Register and GetServers
 type RegisterReply struct {
-	Ready bool
+	Ready   bool
 	Servers []Node
 }
 

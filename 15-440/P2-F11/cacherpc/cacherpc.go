@@ -5,7 +5,7 @@
 package cacherpc
 
 import (
-	"P2-f12/official/storageproto"
+	"goproc/15-440/P2-F11/storageproto"
 )
 
 type CacherInterface interface {

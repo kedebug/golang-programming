@@ -5,10 +5,10 @@ package main
 // DO NOT MODIFY THIS FILE FOR YOUR PROJECT
 
 import (
-	"P2-f12/contrib/storageimpl" // 'official' vs 'contrib' here
-	"P2-f12/official/storagerpc"
 	"flag"
 	"fmt"
+	"goproc/15-440/P2-F11/storageimpl"
+	"goproc/15-440/P2-F11/storagerpc"
 	"log"
 	"net"
 	"net/http"

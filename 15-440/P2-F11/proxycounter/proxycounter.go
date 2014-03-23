@@ -1,24 +1,27 @@
 package proxycounter
 
 import (
-	"P2-f12/official/storageproto"
+	"errors"
+	"fmt"
+	"goproc/15-440/P2-F11/storageproto"
 	"net/rpc"
 	"sync/atomic"
-	"fmt"
-	"errors"
 )
 
 type ProxyCounter struct {
 	srv *rpc.Client
+
 	myhostport string
-	rpcCount uint32
-	byteCount uint32
+	rpcCount   uint32
+	byteCount  uint32
+
 	leaseRequestCount uint32
 	leaseGrantedCount uint32
-	override bool
-	overrideErr error
-	overrideStatus int
-	disableLease bool
+
+	override             bool
+	overrideErr          error
+	overrideStatus       int
+	disableLease         bool
 	overrideLeaseSeconds int
 }
 
