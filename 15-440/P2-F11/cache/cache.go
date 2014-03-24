@@ -72,7 +72,7 @@ func (c *Cache) Get(key string, args *sp.GetArgs) (interface{}, error) {
 }
 
 func (c *Cache) evict() {
-	for _, e := range c.cache {
+	for k, e := range c.cache {
 		e.mu.Lock()
 		if e.granted {
 			dur := time.Since(e.leaseTime)
@@ -81,6 +81,9 @@ func (c *Cache) evict() {
 			}
 		}
 		e.clean()
+		if e.ll.Len() == 0 {
+			delete(c.cache, k)
+		}
 		e.mu.Unlock()
 	}
 }
@@ -99,7 +102,7 @@ func (c *Cache) Revoke(key string) bool {
 	return ok
 }
 
-func (c *Cache) Grant(key string, val interface{}, lease *sp.LeaseStruct) {
+func (c *Cache) Grant(key string, val interface{}, lease sp.LeaseStruct) {
 	c.mu.RLock()
 	e, ok := c.cache[key]
 	c.mu.RUnlock()

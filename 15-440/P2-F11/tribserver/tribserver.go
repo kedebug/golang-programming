@@ -4,9 +4,9 @@ package main
 // DO NOT MODIFY THIS FILE
 
 import (
-	"P2-f12/contrib/tribimpl"
 	"flag"
 	"fmt"
+	"goproc/15-440/P2-F11/tribimpl"
 	"log"
 	"net"
 	"net/http"

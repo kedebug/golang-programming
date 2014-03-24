@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"goproc/15-440/P2-F11/lsplog"
 	sp "goproc/15-440/P2-F11/storageproto"
+	"math/rand"
 	"net/rpc"
 	"sync"
 	"time"
@@ -35,6 +36,11 @@ type leaseEntry struct {
 
 func NewStorageserver(master string, numnodes int, port int, nodeid uint32) *StorageServer {
 	lsplog.SetVerbose(3)
+
+	if nodeid == 0 {
+		rand.Seed(time.Now().UnixNano())
+		nodeid = rand.Uint32()
+	}
 
 	ss := new(StorageServer)
 	ss.nodeid = nodeid

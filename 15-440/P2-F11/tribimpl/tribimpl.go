@@ -45,13 +45,13 @@ func (ts *Tribserver) CreateUser(
 
 	if _, err := ts.store.Get(user_key); err == nil {
 		reply.Status = tp.EEXISTS
-		return errors.New("user already exists")
+		return nil
 	}
 
 	if err := ts.store.Put(user_key, args.Userid); err != nil {
 		lsplog.Vlogf(2, "[Tribserver] user exists: %v\n", err)
 		reply.Status = tp.EEXISTS
-		return errors.New("user already exists")
+		return nil
 	}
 
 	// if err := ts.store.Put(trib_key, ""); lsplog.CheckReport(0, err) {
@@ -77,17 +77,17 @@ func (ts *Tribserver) AddSubscription(
 
 	if _, err := ts.store.Get(user_key); err != nil {
 		reply.Status = tp.ENOSUCHUSER
-		return errors.New("no such user")
+		return nil
 	}
 
 	if _, err := ts.store.Get(targ_key); err != nil {
 		reply.Status = tp.ENOSUCHTARGETUSER
-		return errors.New("no such target user")
+		return nil
 	}
 
 	if err := ts.store.AppendToList(foll_key, args.Targetuser); err != nil {
 		reply.Status = tp.EEXISTS
-		return errors.New("add subscription failed")
+		return nil
 	}
 
 	reply.Status = tp.OK
@@ -103,17 +103,17 @@ func (ts *Tribserver) RemoveSubscription(
 
 	if _, err := ts.store.Get(user_key); err != nil {
 		reply.Status = tp.ENOSUCHUSER
-		return errors.New("no such user")
+		return nil
 	}
 
 	if _, err := ts.store.Get(targ_key); err != nil {
 		reply.Status = tp.ENOSUCHTARGETUSER
-		return errors.New("no such target user")
+		return nil
 	}
 
 	if err := ts.store.RemoveFromList(foll_key, args.Targetuser); err != nil {
 		reply.Status = tp.ENOSUCHTARGETUSER
-		return errors.New("remove subscription failed")
+		return nil
 	}
 
 	reply.Status = tp.OK
@@ -128,13 +128,13 @@ func (ts *Tribserver) GetSubscriptions(
 
 	if _, err := ts.store.Get(user_key); err != nil {
 		reply.Status = tp.ENOSUCHUSER
-		return errors.New("no such user")
+		return nil
 	}
 
 	ids, err := ts.store.GetList(foll_key)
 	if err != nil {
 		reply.Status = tp.ENOSUCHUSER
-		return errors.New("get subscription failed")
+		return nil
 	}
 
 	reply.Userids = ids
@@ -151,7 +151,7 @@ func (ts *Tribserver) GetTribbles(
 
 	if _, err := ts.store.Get(user_key); err != nil {
 		reply.Status = tp.ENOSUCHUSER
-		return errors.New("no such user")
+		return nil
 	}
 
 	var ids []string
@@ -159,7 +159,7 @@ func (ts *Tribserver) GetTribbles(
 
 	if ids, err = ts.store.GetList(trib_key); err != nil {
 		reply.Status = tp.ENOSUCHUSER
-		return errors.New("get tribbles failed")
+		return nil
 	}
 
 	length := len(ids)
@@ -190,14 +190,14 @@ func (ts *Tribserver) PostTribble(
 
 	if _, err := ts.store.Get(user_key); err != nil {
 		reply.Status = tp.ENOSUCHUSER
-		return errors.New("no such user")
+		return nil
 	}
 
 	id := atomic.AddInt32(&ts.id, 1)
 
 	if err := ts.store.AppendToList(trib_key, strconv.Itoa(int(id))); err != nil {
 		reply.Status = tp.EEXISTS
-		return errors.New("post tribble failed, already exists")
+		return nil
 	}
 
 	var trib tp.Tribble
@@ -211,7 +211,7 @@ func (ts *Tribserver) PostTribble(
 
 	if err := ts.store.Put(key, string(val)); err != nil {
 		reply.Status = tp.EEXISTS
-		return errors.New("post tribble failed, put error")
+		return nil
 	}
 
 	reply.Status = tp.OK
@@ -233,13 +233,13 @@ func (ts *Tribserver) GetTribblesBySubscription(
 
 	if _, err := ts.store.Get(user_key); lsplog.CheckReport(2, err) {
 		reply.Status = tp.ENOSUCHUSER
-		return errors.New("no such user")
+		return nil
 	}
 
 	follows, err := ts.store.GetList(foll_key)
 	if lsplog.CheckReport(3, err) {
 		reply.Status = tp.ENOSUCHUSER
-		return errors.New("no such user")
+		return nil
 	}
 
 	for i := 0; i < len(follows); i++ {
