@@ -4,14 +4,14 @@ package main
 // single server and performs the specified operation.
 
 import (
-	"P2-f12/contrib/storageproto"
 	"flag"
 	"fmt"
+	"github.com/kedebug/golang-programming/15-440/P2-F11/storageproto"
 	"log"
 	"net"
 	"net/rpc"
-	"strings"
 	"os"
+	"strings"
 )
 
 // For parsing the command line
@@ -28,7 +28,6 @@ const (
 
 var portnum *int = flag.Int("port", 9009, "server port # to connect to")
 var serverAddress *string = flag.String("host", "localhost", "server host to connect to")
-
 
 func main() {
 	flag.Usage = func() {

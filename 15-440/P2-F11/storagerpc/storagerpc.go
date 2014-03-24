@@ -9,7 +9,7 @@
 package storagerpc
 
 import (
-	"goproc/15-440/P2-F11/storageproto"
+	"github.com/kedebug/golang-programming/15-440/P2-F11/storageproto"
 )
 
 type StorageInterface interface {

@@ -1,12 +1,12 @@
 package main
 
 import (
-	"P2-f12/contrib/libstore"
-	"P2-f12/official/proxycounter"
-	"P2-f12/official/storageproto"
-	"P2-f12/official/storagerpc"
 	"flag"
 	"fmt"
+	"github.com/kedebug/golang-programming/15-440/P2-F11/libstore"
+	"github.com/kedebug/golang-programming/15-440/P2-F11/proxycounter"
+	"github.com/kedebug/golang-programming/15-440/P2-F11/storageproto"
+	"github.com/kedebug/golang-programming/15-440/P2-F11/storagerpc"
 	"io"
 	"log"
 	"net"

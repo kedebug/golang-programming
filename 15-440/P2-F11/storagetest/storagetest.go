@@ -3,8 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"goproc/15-440/P2-F11/cacherpc"
-	"goproc/15-440/P2-F11/storageproto"
+	"github.com/kedebug/golang-programming/15-440/P2-F11/cacherpc"
+	"github.com/kedebug/golang-programming/15-440/P2-F11/storageproto"
 	"io"
 	"log"
 	"net"

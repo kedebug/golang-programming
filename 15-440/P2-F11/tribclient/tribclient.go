@@ -1,7 +1,7 @@
 package tribclient
 
 import (
-	"P2-f12/official/tribproto"
+	"github.com/kedebug/golang-programming/15-440/P2-F11/tribproto"
 	"log"
 	"net"
 	"net/rpc"

@@ -7,8 +7,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"goproc/15-440/P2-F11/storageimpl"
-	"goproc/15-440/P2-F11/storagerpc"
+	"github.com/kedebug/golang-programming/15-440/P2-F11/storageimpl"
+	"github.com/kedebug/golang-programming/15-440/P2-F11/storagerpc"
 	"log"
 	"net"
 	"net/http"

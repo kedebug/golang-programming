@@ -2,8 +2,8 @@ package cache
 
 import (
 	"container/list"
-	"goproc/15-440/P2-F11/lsplog"
-	sp "goproc/15-440/P2-F11/storageproto"
+	"github.com/kedebug/golang-programming/15-440/P2-F11/lsplog"
+	sp "github.com/kedebug/golang-programming/15-440/P2-F11/storageproto"
 	"sync"
 	"time"
 )

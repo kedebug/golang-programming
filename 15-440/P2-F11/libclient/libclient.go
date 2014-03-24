@@ -6,9 +6,9 @@ package main
 // system.
 
 import (
-	"P2-f12/contrib/libstore"
 	"flag"
 	"fmt"
+	"github.com/kedebug/golang-programming/15-440/P2-F11/libstore"
 	"log"
 	"net"
 	"net/http"

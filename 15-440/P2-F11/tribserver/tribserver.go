@@ -6,7 +6,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"goproc/15-440/P2-F11/tribimpl"
+	"github.com/kedebug/golang-programming/15-440/P2-F11/tribimpl"
 	"log"
 	"net"
 	"net/http"
