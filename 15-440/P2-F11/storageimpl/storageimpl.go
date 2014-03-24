@@ -29,6 +29,7 @@ type holder struct {
 
 type leaseEntry struct {
 	mu      sync.Mutex
+	pending bool
 	holders []holder
 }
 
@@ -38,6 +39,8 @@ func NewStorageserver(master string, numnodes int, port int, nodeid uint32) *Sto
 	ss := new(StorageServer)
 	ss.nodeid = nodeid
 	ss.port = port
+	ss.hashmap = make(map[string][]byte)
+	ss.leasePool = make(map[string]*leaseEntry)
 
 	addr := fmt.Sprintf("localhost:%d", port)
 	if master == addr {
@@ -77,12 +80,23 @@ func NewStorageserver(master string, numnodes int, port int, nodeid uint32) *Sto
 }
 
 func (ss *StorageServer) addLeasePool(args *sp.GetArgs, lease *sp.LeaseStruct) {
-	ss.mu.Lock()
-	defer ss.mu.Unlock()
+	lsplog.Vlogf(3, "[StorageServer] addLeasePool: %v\n", args.Key)
+
+	ss.mu.RLock()
 	e, ok := ss.leasePool[args.Key]
+	ss.mu.RUnlock()
+
+	lease.Granted = true
+	lease.ValidSeconds = sp.LEASE_SECONDS
+
 	if ok {
 		e.mu.Lock()
 		defer e.mu.Unlock()
+		if e.pending {
+			lease.Granted = false
+			lease.ValidSeconds = 0
+			return
+		}
 		for _, h := range e.holders {
 			if h.address == args.LeaseClient {
 				h.issueTime = time.Now()
@@ -91,7 +105,11 @@ func (ss *StorageServer) addLeasePool(args *sp.GetArgs, lease *sp.LeaseStruct) {
 		}
 	} else {
 		e = &leaseEntry{}
+
+		ss.mu.Lock()
 		ss.leasePool[args.Key] = e
+		ss.mu.Unlock()
+
 		e.mu.Lock()
 		defer e.mu.Unlock()
 	}
@@ -100,18 +118,19 @@ func (ss *StorageServer) addLeasePool(args *sp.GetArgs, lease *sp.LeaseStruct) {
 }
 
 func (ss *StorageServer) revokeLease(key string) {
+	lsplog.Vlogf(3, "[StorageServer] revokeLease: %v\n", key)
+
 	ss.mu.Lock()
 	e, ok := ss.leasePool[key]
+	ss.mu.Unlock()
 	if !ok {
-		ss.mu.Unlock()
 		return
-	} else {
-		delete(ss.leasePool, key)
-		ss.mu.Unlock()
 	}
 
 	e.mu.Lock()
-	defer e.mu.Unlock()
+	e.pending = true
+	e.mu.Unlock()
+
 	for _, h := range e.holders {
 		dur := time.Since(h.issueTime).Seconds()
 		if dur > sp.LEASE_SECONDS+sp.LEASE_GUARD_SECONDS {
@@ -141,6 +160,10 @@ func (ss *StorageServer) revokeLease(key string) {
 		case <-time.After((sp.LEASE_SECONDS + sp.LEASE_GUARD_SECONDS) * time.Second):
 		}
 	}
+
+	e.mu.Lock()
+	e.pending = false
+	e.mu.Unlock()
 }
 
 func (ss *StorageServer) Get(args *sp.GetArgs, reply *sp.GetReply) error {
@@ -150,15 +173,18 @@ func (ss *StorageServer) Get(args *sp.GetArgs, reply *sp.GetReply) error {
 
 	if !present {
 		lsplog.Vlogf(3, "[StorageServer] Get key: %s nonexist\n", args.Key)
-		reply.Status = sp.EKEYNOTFOUND
+		reply.Status = sp.EWRONGSERVER
 		return nil
 	}
 
-	json.Unmarshal(value, &(reply.Value))
+	json.Unmarshal(value, &reply.Value)
 	if args.WantLease {
-		ss.addLeasePool(args, &(reply.Lease))
+		ss.addLeasePool(args, &reply.Lease)
 	}
 	reply.Status = sp.OK
+
+	lsplog.Vlogf(3, "[StorageServer] Get, key=%v, value=%v\n", args.Key, reply.Value)
+
 	return nil
 }
 
@@ -189,6 +215,8 @@ func (ss *StorageServer) Put(args *sp.PutArgs, reply *sp.PutReply) error {
 
 	ss.hashmap[args.Key], _ = json.Marshal(args.Value)
 	reply.Status = sp.OK
+
+	lsplog.Vlogf(3, "[StorageServer] Put, key=%v, value=%v\n", args.Key, args.Value)
 	return nil
 }
 
