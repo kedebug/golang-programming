@@ -1,31 +1,31 @@
 package main
 
 import (
-	"P2-f12/official/storageproto"
-	"P2-f12/official/cacherpc"
-	"net/rpc"
-	"fmt"
 	"flag"
-	"os"
+	"fmt"
+	"goproc/15-440/P2-F11/cacherpc"
+	"goproc/15-440/P2-F11/storageproto"
 	"io"
 	"log"
-	"regexp"
 	"net"
 	"net/http"
+	"net/rpc"
+	"os"
+	"regexp"
 	"time"
 )
 
 type StorageTester struct {
-	srv		*rpc.Client
-	myhostport	string
-	recv_revoke	map[string] bool	// whether we have received a RevokeLease for key x
-	comp_revoke	map[string] bool	// whether we have replied the RevokeLease for key x
-	delay		float32			// how long to delay the reply of RevokeLease
+	srv         *rpc.Client
+	myhostport  string
+	recv_revoke map[string]bool // whether we have received a RevokeLease for key x
+	comp_revoke map[string]bool // whether we have replied the RevokeLease for key x
+	delay       float32         // how long to delay the reply of RevokeLease
 }
 
 type TestFunc struct {
 	name string
-	f func()
+	f    func()
 }
 
 var portnum *int = flag.Int("port", 9019, "port # to listen on")
@@ -41,8 +41,8 @@ var st *StorageTester
 func initStorageTester(server string, myhostport string) *StorageTester {
 	tester := &StorageTester{}
 	tester.myhostport = myhostport
-	tester.recv_revoke = make(map[string] bool)
-	tester.comp_revoke = make(map[string] bool)
+	tester.recv_revoke = make(map[string]bool)
+	tester.comp_revoke = make(map[string]bool)
 	// Create RPC connection to storage server
 	srv, err := rpc.DialHTTP("tcp", server)
 	if err != nil {
@@ -76,7 +76,7 @@ func (st *StorageTester) RevokeLease(args *storageproto.RevokeLeaseArgs, reply *
 	//fmt.Printf("Revoke Msg received %s\n", args.Key)
 	st.recv_revoke[args.Key] = true
 	st.comp_revoke[args.Key] = false
-	time.Sleep(time.Duration(st.delay * 1000) * time.Millisecond)
+	time.Sleep(time.Duration(st.delay*1000) * time.Millisecond)
 	st.comp_revoke[args.Key] = true
 	reply.Status = storageproto.OK
 	return nil
@@ -85,7 +85,7 @@ func (st *StorageTester) RevokeLease(args *storageproto.RevokeLeaseArgs, reply *
 // Helper functions to test a single storage server
 func (st *StorageTester) GetServers() (*storageproto.RegisterReply, error) {
 	args := &storageproto.GetServersArgs{}
-	var reply storageproto.RegisterReply;
+	var reply storageproto.RegisterReply
 	err := st.srv.Call("StorageRPC.GetServers", args, &reply)
 	return &reply, err
 }
@@ -93,7 +93,7 @@ func (st *StorageTester) GetServers() (*storageproto.RegisterReply, error) {
 func (st *StorageTester) RegisterServer() (*storageproto.RegisterReply, error) {
 	node := storageproto.Node{st.myhostport, uint32(*myID)}
 	args := &storageproto.RegisterArgs{node}
-	var reply storageproto.RegisterReply;
+	var reply storageproto.RegisterReply
 	err := st.srv.Call("StorageRPC.Register", args, &reply)
 	return &reply, err
 }
@@ -173,7 +173,7 @@ func checkList(list []string, expectedList []string) bool {
 		failCount++
 		return true
 	}
-	m := make(map[string] bool)
+	m := make(map[string]bool)
 	for _, s := range list {
 		m[s] = true
 	}
@@ -189,7 +189,7 @@ func checkList(list []string, expectedList []string) bool {
 
 // We treat a RPC call finihsed in 0.5 seconds as OK
 func isTimeOK(d time.Duration) bool {
-	return d < 500 * time.Millisecond
+	return d < 500*time.Millisecond
 }
 
 // Cache a key
@@ -260,6 +260,10 @@ func testInitStorageServers() {
 		return
 	}
 	if len(replyR.Servers) != (*numServer) {
+		fmt.Printf("numServer=%d\n", *numServer)
+		for _, s := range replyR.Servers {
+			fmt.Printf("server: %s, id=%d\n", s.HostPort, s.NodeID)
+		}
 		fmt.Fprintln(output, "FAIL: storage seystem returned wrong serverlist", err)
 		failCount++
 		return
@@ -327,7 +331,6 @@ func testPutGet() {
 	passCount++
 }
 
-
 // list related operations
 func testAppendGetRemoveList() {
 	// test AppendToList
@@ -386,7 +389,6 @@ func testAppendGetRemoveList() {
 	passCount++
 }
 
-
 /////////////////////////////////////////////
 //  test revoke related
 /////////////////////////////////////////////
@@ -438,7 +440,7 @@ func testUpdateBeforeLeaseExpire() {
 	}
 
 	// update this key
- 	replyP, err := st.Put(key, "value1")
+	replyP, err := st.Put(key, "value1")
 	if checkErrorStatus(err, replyP.Status, storageproto.OK) {
 		return
 	}
@@ -478,7 +480,7 @@ func testUpdateAfterLeaseExpire() {
 	time.Sleep((storageproto.LEASE_SECONDS + storageproto.LEASE_GUARD_SECONDS + 1) * time.Second)
 
 	// update this key
- 	replyP, err := st.Put(key, "value1")
+	replyP, err := st.Put(key, "value1")
 	if checkErrorStatus(err, replyP.Status, storageproto.OK) {
 		return
 	}
@@ -520,7 +522,7 @@ func delayedRevoke(key string, f func() bool) bool {
 		// put key1 again to trigger a revoke
 		replyP, err = st.Put(key, "new-value")
 		putCh <- true
-	} ()
+	}()
 	// ensure Put has gotten to server
 	time.Sleep(100 * time.Millisecond)
 
@@ -529,7 +531,7 @@ func delayedRevoke(key string, f func() bool) bool {
 		// run rest of test function
 		ret := f()
 		// wait for put to complete
-		<- putCh
+		<-putCh
 		// check for failures
 		if ret {
 			doneCh <- true
@@ -540,13 +542,13 @@ func delayedRevoke(key string, f func() bool) bool {
 			return
 		}
 		doneCh <- false
-	} ()
+	}()
 
 	// wait for test completion or timeout
 	select {
-	case ret := <- doneCh:
+	case ret := <-doneCh:
 		return ret
-	case <- time.After((storageproto.LEASE_SECONDS + storageproto.LEASE_GUARD_SECONDS + 1) * time.Second):
+	case <-time.After((storageproto.LEASE_SECONDS + storageproto.LEASE_GUARD_SECONDS + 1) * time.Second):
 		break
 	}
 	fmt.Fprintln(output, "FAIL: timeout, may erroneously increase test count")
@@ -629,7 +631,7 @@ func testDelayedRevokeWithLeaseRequest1() {
 				return true
 			}
 		} else {
-			if !st.comp_revoke[key1] || ( !replyG.Lease.Granted || replyG.Value != "new-value") {
+			if !st.comp_revoke[key1] || (!replyG.Lease.Granted || replyG.Value != "new-value") {
 				fmt.Fprintln(output, "FAIL: server should return new value and grant lease")
 				failCount++
 				return true
@@ -673,7 +675,7 @@ func testDelayedRevokeWithLeaseRequest2() {
 				return true
 			}
 		} else {
-			if st.comp_revoke[key1] || ( !replyG.Lease.Granted || replyG.Value != "new-value") {
+			if st.comp_revoke[key1] || (!replyG.Lease.Granted || replyG.Value != "new-value") {
 				fmt.Fprintln(output, "FAIL: server should return new value and grant lease")
 				failCount++
 				return true
@@ -704,21 +706,21 @@ func testDelayedRevokeWithUpdate1() {
 		// put key1, this should block
 		replyP, err := st.Put(key1, "newnew-value")
 		if checkErrorStatus(err, replyP.Status, storageproto.OK) {
-	 		return true
+			return true
 		}
 		if !st.comp_revoke[key1] {
-	 		fmt.Fprintln(output, "FAIL: storage server should hold modification to key x during finishing revocating all lease holders of x")
-	 		failCount++
-	 		return true
+			fmt.Fprintln(output, "FAIL: storage server should hold modification to key x during finishing revocating all lease holders of x")
+			failCount++
+			return true
 		}
 		replyG, err := st.Get(key1, false)
 		if checkErrorStatus(err, replyG.Status, storageproto.OK) {
-	 		return true
+			return true
 		}
 		if replyG.Value != "newnew-value" {
-	 		fmt.Fprintln(output, "FAIL: got wrong value")
-	 		failCount++
-	 		return true
+			fmt.Fprintln(output, "FAIL: got wrong value")
+			failCount++
+			return true
 		}
 		return false
 	}
@@ -746,27 +748,27 @@ func testDelayedRevokeWithUpdate2() {
 		// put key1, this should block
 		replyP, err := st.Put(key1, "newnew-value")
 		if checkErrorStatus(err, replyP.Status, storageproto.OK) {
-	 		return true
+			return true
 		}
 		d := time.Since(ts)
-		if d < (storageproto.LEASE_SECONDS + storageproto.LEASE_GUARD_SECONDS - 1) * time.Second {
-	 		fmt.Fprintln(output, "FAIL: storage server should hold this Put until leases expires key1")
-	 		failCount++
-	 		return true
+		if d < (storageproto.LEASE_SECONDS+storageproto.LEASE_GUARD_SECONDS-1)*time.Second {
+			fmt.Fprintln(output, "FAIL: storage server should hold this Put until leases expires key1")
+			failCount++
+			return true
 		}
 		if st.comp_revoke[key1] {
-	 		fmt.Fprintln(output, "FAIL: storage server should not block this Put till the lease revoke of key1")
-	 		failCount++
-	 		return true
+			fmt.Fprintln(output, "FAIL: storage server should not block this Put till the lease revoke of key1")
+			failCount++
+			return true
 		}
 		replyG, err := st.Get(key1, false)
 		if checkErrorStatus(err, replyG.Status, storageproto.OK) {
-	 		return true
+			return true
 		}
 		if replyG.Value != "newnew-value" {
-	 		fmt.Fprintln(output, "FAIL: got wrong value")
-	 		failCount++
-	 		return true
+			fmt.Fprintln(output, "FAIL: got wrong value")
+			failCount++
+			return true
 		}
 		return false
 	}
@@ -795,28 +797,28 @@ func testDelayedRevokeWithUpdate3() {
 		ts := time.Now()
 		replyP, err := st.Put(key1, "newnew-value")
 		if checkErrorStatus(err, replyP.Status, storageproto.OK) {
-	 		return true
+			return true
 		}
 		if !isTimeOK(time.Since(ts)) {
-	 		fmt.Fprintln(output, "FAIL: storage server should not block this Put")
-	 		failCount++
-	 		return true
+			fmt.Fprintln(output, "FAIL: storage server should not block this Put")
+			failCount++
+			return true
 		}
 		// get key1 and want lease, this should not block
 		ts = time.Now()
 		replyG, err := st.Get(key1, true)
 		if checkErrorStatus(err, replyG.Status, storageproto.OK) {
-	 		return true
+			return true
 		}
 		if replyG.Value != "newnew-value" {
-	 		fmt.Fprintln(output, "FAIL: got wrong value")
-	 		failCount++
-	 		return true
+			fmt.Fprintln(output, "FAIL: got wrong value")
+			failCount++
+			return true
 		}
 		if !isTimeOK(time.Since(ts)) {
-	 		fmt.Fprintln(output, "FAIL: storage server should not block this Get")
-	 		failCount++
-	 		return true
+			fmt.Fprintln(output, "FAIL: storage server should not block this Get")
+			failCount++
+			return true
 		}
 		return false
 	}
@@ -969,7 +971,7 @@ func delayedRevokeList(key string, f func() bool) bool {
 		// append key to trigger a revoke
 		replyP, err = st.AppendToList(key, "new-value")
 		appendCh <- true
-	} ()
+	}()
 	// ensure Put has gotten to server
 	time.Sleep(100 * time.Millisecond)
 
@@ -978,7 +980,7 @@ func delayedRevokeList(key string, f func() bool) bool {
 		// run rest of test function
 		ret := f()
 		// wait for append to complete
-		<- appendCh
+		<-appendCh
 		// check for failures
 		if ret {
 			doneCh <- true
@@ -989,13 +991,13 @@ func delayedRevokeList(key string, f func() bool) bool {
 			return
 		}
 		doneCh <- false
-	} ()
+	}()
 
 	// wait for test completion or timeout
 	select {
-	case ret := <- doneCh:
+	case ret := <-doneCh:
 		return ret
-	case <- time.After((storageproto.LEASE_SECONDS + storageproto.LEASE_GUARD_SECONDS + 1) * time.Second):
+	case <-time.After((storageproto.LEASE_SECONDS + storageproto.LEASE_GUARD_SECONDS + 1) * time.Second):
 		break
 	}
 	fmt.Fprintln(output, "FAIL: timeout, may erroneously increase test count")
@@ -1159,16 +1161,16 @@ func testDelayedRevokeListWithUpdate1() {
 		// put key1, this should block
 		replyP, err := st.AppendToList(key1, "newnew-value")
 		if checkErrorStatus(err, replyP.Status, storageproto.OK) {
-	 		return true
+			return true
 		}
 		if !st.comp_revoke[key1] {
-	 		fmt.Fprintln(output, "FAIL: storage server should hold modification to key x during finishing revocating all lease holders of x")
-	 		failCount++
-	 		return true
+			fmt.Fprintln(output, "FAIL: storage server should hold modification to key x during finishing revocating all lease holders of x")
+			failCount++
+			return true
 		}
 		replyL, err := st.GetList(key1, false)
 		if checkErrorStatus(err, replyL.Status, storageproto.OK) {
-	 		return true
+			return true
 		}
 		if checkList(replyL.Value, []string{"old-value", "new-value", "newnew-value"}) {
 			return true
@@ -1199,22 +1201,22 @@ func testDelayedRevokeListWithUpdate2() {
 		// put key1, this should block
 		replyP, err := st.AppendToList(key1, "newnew-value")
 		if checkErrorStatus(err, replyP.Status, storageproto.OK) {
-	 		return true
+			return true
 		}
 		d := time.Since(ts)
-		if d < (storageproto.LEASE_SECONDS + storageproto.LEASE_GUARD_SECONDS - 1) * time.Second {
-	 		fmt.Fprintln(output, "FAIL: storage server should hold this Put until leases expires key1")
-	 		failCount++
-	 		return true
+		if d < (storageproto.LEASE_SECONDS+storageproto.LEASE_GUARD_SECONDS-1)*time.Second {
+			fmt.Fprintln(output, "FAIL: storage server should hold this Put until leases expires key1")
+			failCount++
+			return true
 		}
 		if st.comp_revoke[key1] {
-	 		fmt.Fprintln(output, "FAIL: storage server should not block this Put till the lease revoke of key1")
-	 		failCount++
-	 		return true
+			fmt.Fprintln(output, "FAIL: storage server should not block this Put till the lease revoke of key1")
+			failCount++
+			return true
 		}
 		replyL, err := st.GetList(key1, false)
 		if checkErrorStatus(err, replyL.Status, storageproto.OK) {
-	 		return true
+			return true
 		}
 		if checkList(replyL.Value, []string{"old-value", "new-value", "newnew-value"}) {
 			return true
@@ -1246,26 +1248,26 @@ func testDelayedRevokeListWithUpdate3() {
 		ts := time.Now()
 		replyP, err := st.AppendToList(key1, "newnew-value")
 		if checkErrorStatus(err, replyP.Status, storageproto.OK) {
-	 		return true
+			return true
 		}
 		if !isTimeOK(time.Since(ts)) {
-	 		fmt.Fprintln(output, "FAIL: storage server should not block this Put")
-	 		failCount++
-	 		return true
+			fmt.Fprintln(output, "FAIL: storage server should not block this Put")
+			failCount++
+			return true
 		}
 		// get key1 and want lease, this should not block
 		ts = time.Now()
 		replyL, err := st.GetList(key1, true)
 		if checkErrorStatus(err, replyL.Status, storageproto.OK) {
-	 		return true
+			return true
 		}
 		if checkList(replyL.Value, []string{"old-value", "new-value", "newnew-value"}) {
 			return true
 		}
 		if !isTimeOK(time.Since(ts)) {
-	 		fmt.Fprintln(output, "FAIL: storage server should not block this Get")
-	 		failCount++
-	 		return true
+			fmt.Fprintln(output, "FAIL: storage server should not block this Get")
+			failCount++
+			return true
 		}
 		return false
 	}
@@ -1324,7 +1326,7 @@ func main() {
 	}
 
 	// Run btests
-	switch (*testType) {
+	switch *testType {
 	case 1:
 		for _, t := range jtests {
 			if b, err := regexp.MatchString(*testRegex, t.name); b && err == nil {
@@ -1341,5 +1343,5 @@ func main() {
 		}
 	}
 
-	fmt.Printf("Passed (%d/%d) tests\n", passCount, passCount + failCount)
+	fmt.Printf("Passed (%d/%d) tests\n", passCount, passCount+failCount)
 }

@@ -1,12 +1,12 @@
 package main
 
 import (
-	"P2-f12/contrib/tribimpl"
-	"P2-f12/official/proxycounter"
-	"P2-f12/official/storagerpc"
-	"P2-f12/official/tribproto"
 	"flag"
 	"fmt"
+	"goproc/15-440/P2-F11/proxycounter"
+	"goproc/15-440/P2-F11/storagerpc"
+	"goproc/15-440/P2-F11/tribimpl"
+	"goproc/15-440/P2-F11/tribproto"
 	"io"
 	"log"
 	"net"
@@ -757,6 +757,7 @@ func main() {
 			t.f()
 		}
 	}
+	fmt.Println(flag.Arg(0))
 
 	l := initTribserver(flag.Arg(0), fmt.Sprintf("localhost:%d", *portnum), fmt.Sprintf("localhost:%d", *portnum))
 	if l == nil {
