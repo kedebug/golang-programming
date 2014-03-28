@@ -15,14 +15,49 @@ type ViewServer struct {
 	me   string
 
 	// Your declarations here.
+	view    View
+	clients map[string]*Client
+
+	acked            bool
+	primaryRestarted bool
+}
+
+type Client struct {
+	hostport    string
+	dead        bool
+	idle        bool
+	lastViewnum uint
+	lastPing    time.Time
 }
 
 //
 // server Ping RPC handler.
 //
 func (vs *ViewServer) Ping(args *PingArgs, reply *PingReply) error {
+	vs.mu.Lock()
+	defer vs.mu.Unlock()
 
-	// Your code here.
+	cli, ok := vs.clients[args.Me]
+	if !ok {
+		cli = new(Client)
+		cli.hostport = args.Me
+		cli.idle = true
+		vs.clients[args.Me] = cli
+	}
+
+	if args.Me == vs.view.Primary && args.Viewnum == vs.view.Viewnum {
+		vs.acked = true
+	}
+
+	if args.Me == vs.view.Primary && args.Viewnum == 0 && vs.view.Viewnum != 0 && vs.acked {
+		vs.primaryRestarted = true
+	}
+
+	cli.dead = false
+	cli.lastViewnum = args.Viewnum
+	cli.lastPing = time.Now()
+
+	reply.View = vs.view
 
 	return nil
 }
@@ -31,8 +66,10 @@ func (vs *ViewServer) Ping(args *PingArgs, reply *PingReply) error {
 // server Get() RPC handler.
 //
 func (vs *ViewServer) Get(args *GetArgs, reply *GetReply) error {
+	vs.mu.Lock()
+	defer vs.mu.Unlock()
 
-	// Your code here.
+	reply.View = vs.view
 
 	return nil
 }
@@ -43,8 +80,72 @@ func (vs *ViewServer) Get(args *GetArgs, reply *GetReply) error {
 // accordingly.
 //
 func (vs *ViewServer) tick() {
+	vs.mu.Lock()
+	defer vs.mu.Unlock()
 
-	// Your code here.
+	v := &vs.view
+
+	var idle_client *Client
+	var inited_idle_client *Client
+
+	for _, cli := range vs.clients {
+		dur := time.Since(cli.lastPing)
+		if dur > PingInterval {
+			cli.idle = true
+			cli.dead = true
+		}
+
+		if !cli.dead && cli.idle && idle_client == nil {
+			idle_client = cli
+		}
+
+		if !cli.dead && cli.idle &&
+			cli.lastViewnum == v.Viewnum && inited_idle_client == nil {
+			inited_idle_client = cli
+		}
+	}
+
+	if vs.acked {
+		if v.Primary != "" && vs.clients[v.Primary].dead {
+			v.Primary = ""
+		}
+
+		if v.Backup != "" && vs.clients[v.Backup].dead {
+			v.Backup = ""
+		}
+
+		if vs.primaryRestarted {
+			vs.clients[v.Primary].idle = true
+			v.Primary = ""
+			vs.primaryRestarted = false
+		}
+
+		if v.Primary == "" && v.Backup == "" {
+			if inited_idle_client != nil {
+				v.Primary = inited_idle_client.hostport
+				v.Viewnum++
+
+				vs.acked = false
+				inited_idle_client.idle = false
+			}
+		} else if v.Primary == "" {
+			if vs.clients[v.Backup].lastViewnum == v.Viewnum {
+				v.Primary = v.Backup
+				v.Backup = ""
+				v.Viewnum++
+
+				vs.acked = false
+			}
+		} else if v.Backup == "" {
+			if idle_client != nil {
+				v.Backup = idle_client.hostport
+				v.Viewnum++
+
+				vs.acked = false
+				idle_client.idle = false
+			}
+		}
+	}
 }
 
 //
@@ -61,6 +162,8 @@ func StartServer(me string) *ViewServer {
 	vs := new(ViewServer)
 	vs.me = me
 	// Your vs.* initializations here.
+	vs.acked = true
+	vs.clients = make(map[string]*Client)
 
 	// tell net/rpc about our RPC server and handlers.
 	rpcs := rpc.NewServer()
