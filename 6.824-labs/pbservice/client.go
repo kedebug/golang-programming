@@ -1,21 +1,21 @@
 package pbservice
 
-import "viewservice"
+import "github.com/kedebug/golang-programming/6.824-labs/viewservice"
 import "net/rpc"
+
 // You'll probably need to uncomment this:
 // import "time"
 
-
 type Clerk struct {
-  vs *viewservice.Clerk
+	vs   *viewservice.Clerk
+	view viewservice.View
 }
 
 func MakeClerk(vshost string, me string) *Clerk {
-  ck := new(Clerk)
-  ck.vs = viewservice.MakeClerk(me, vshost)
-  return ck
+	ck := new(Clerk)
+	ck.vs = viewservice.MakeClerk(me, vshost)
+	return ck
 }
-
 
 //
 // call() sends an RPC to the rpcname handler on server srv
@@ -34,18 +34,24 @@ func MakeClerk(vshost string, me string) *Clerk {
 // please don't change this function.
 //
 func call(srv string, rpcname string,
-          args interface{}, reply interface{}) bool {
-  c, errx := rpc.Dial("unix", srv)
-  if errx != nil {
-    return false
-  }
-  defer c.Close()
-    
-  err := c.Call(rpcname, args, reply)
-  if err == nil {
-    return true
-  }
-  return false
+	args interface{}, reply interface{}) bool {
+	c, errx := rpc.Dial("unix", srv)
+	if errx != nil {
+		return false
+	}
+	defer c.Close()
+
+	err := c.Call(rpcname, args, reply)
+	if err == nil {
+		return true
+	}
+	return false
+}
+
+func (ck *Clerk) updateView() {
+	if v, ok := ck.vs.Get(); ok {
+		ck.view = v
+	}
 }
 
 //
@@ -56,10 +62,26 @@ func call(srv string, rpcname string,
 // says the key doesn't exist (has never been Put().
 //
 func (ck *Clerk) Get(key string) string {
+	for ck.view.Primary == "" {
+		ck.updateView()
+	}
 
-  // Your code here.
+	var args GetArgs = GetArgs{key}
+	var reply GetReply
 
-  return "???"
+	ok := call(ck.view.Primary, "PBServer.Get", &args, &reply)
+	if reply.Err == ErrNoKey {
+		return string(reply.Err)
+	}
+	if !ok || reply.Err == ErrWrongServer {
+		ck.updateView()
+		ok = call(ck.view.Primary, "PBServer.Get", &args, &reply)
+	}
+	if reply.Err == OK {
+		return reply.Value
+	}
+
+	return string(reply.Err)
 }
 
 //
@@ -67,6 +89,16 @@ func (ck *Clerk) Get(key string) string {
 // must keep trying until it succeeds.
 //
 func (ck *Clerk) Put(key string, value string) {
+	for ck.view.Primary == "" {
+		ck.updateView()
+	}
 
-  // Your code here.
+	var args PutArgs = PutArgs{key, value}
+	var reply PutReply
+
+	ok := call(ck.view.Primary, "PBServer.Put", &args, &reply)
+	if !ok || reply.Err == ErrWrongServer {
+		ck.updateView()
+		ok = call(ck.view.Primary, "PBServer.Put", &args, &reply)
+	}
 }
