@@ -90,7 +90,7 @@ func (vs *ViewServer) tick() {
 
 	for _, cli := range vs.clients {
 		dur := time.Since(cli.lastPing)
-		if dur > PingInterval {
+		if dur > PingInterval*DeadPings {
 			cli.idle = true
 			cli.dead = true
 		}
