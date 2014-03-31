@@ -33,9 +33,9 @@ func (pb *PBServer) Get(args *GetArgs, reply *GetReply) error {
 	fargs.Key = args.Key
 
 	if pb.view.Primary == pb.me && pb.view.Backup != "" {
-		_ = call(pb.view.Backup, "PBServer.Forward", &fargs, &freply)
-		if freply.Err != OK {
-			reply.Err = freply.Err
+		ok := call(pb.view.Backup, "PBServer.Forward", &fargs, &freply)
+		if !ok || freply.Err != OK {
+			reply.Err = ErrWrongServer
 			return nil
 		}
 	}
@@ -64,9 +64,9 @@ func (pb *PBServer) Put(args *PutArgs, reply *PutReply) error {
 	fargs.Value = args.Value
 
 	if pb.view.Primary == pb.me && pb.view.Backup != "" {
-		_ = call(pb.view.Backup, "PBServer.Forward", &fargs, &freply)
-		if freply.Err != OK {
-			reply.Err = freply.Err
+		ok := call(pb.view.Backup, "PBServer.Forward", &fargs, &freply)
+		if !ok || freply.Err != OK {
+			reply.Err = ErrWrongServer
 			return nil
 		}
 	}
@@ -123,22 +123,22 @@ func (pb *PBServer) Sync(args *SyncArgs, reply *SyncReply) error {
 //   manage transfer of state from primary to new backup.
 //
 func (pb *PBServer) tick() {
+	pb.mu.Lock()
+	defer pb.mu.Unlock()
+
 	v, err := pb.vs.Ping(pb.view.Viewnum)
 	if err != nil {
 		log.Println("Ping error:", err)
 		return
 	}
 
-	pb.mu.Lock()
-	defer pb.mu.Unlock()
-
 	if v.Viewnum == pb.view.Viewnum {
 		return
 	}
 	pb.view = v
 
-	log.Println("from:", pb.me)
 	log.Println("viewnum:", pb.view.Viewnum)
+	log.Println("from:", pb.me)
 	log.Println("primary:", pb.view.Primary)
 	log.Println("backup:", pb.view.Backup)
 
@@ -146,9 +146,14 @@ func (pb *PBServer) tick() {
 		args := &SyncArgs{pb.store}
 		reply := &SyncReply{}
 		ok := call(pb.view.Backup, "PBServer.Sync", args, reply)
-		if !ok {
-			log.Println("sync rpc call error")
-			return
+		for !ok {
+			log.Println(pb.view.Backup, "crashed")
+			pb.view, _ = pb.vs.Ping(pb.view.Viewnum)
+			if pb.view.Backup != "" {
+				ok = call(pb.view.Backup, "PBServer.Sync", args, reply)
+			} else {
+				ok = true
+			}
 		}
 		if reply.Err != OK {
 			log.Println("Sync error:", reply.Err)

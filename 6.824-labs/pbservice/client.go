@@ -73,7 +73,7 @@ func (ck *Clerk) Get(key string) string {
 	if reply.Err == ErrNoKey {
 		return string(reply.Err)
 	}
-	if !ok || reply.Err == ErrWrongServer {
+	for !ok || reply.Err == ErrWrongServer {
 		ck.updateView()
 		ok = call(ck.view.Primary, "PBServer.Get", &args, &reply)
 	}
@@ -97,7 +97,7 @@ func (ck *Clerk) Put(key string, value string) {
 	var reply PutReply
 
 	ok := call(ck.view.Primary, "PBServer.Put", &args, &reply)
-	if !ok || reply.Err == ErrWrongServer {
+	for !ok || reply.Err == ErrWrongServer {
 		ck.updateView()
 		ok = call(ck.view.Primary, "PBServer.Put", &args, &reply)
 	}
