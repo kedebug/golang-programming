@@ -1,27 +1,28 @@
 package kvpaxos
 
 const (
-  OK = "OK"
-  ErrNoKey = "ErrNoKey"
+	OK       = "OK"
+	ErrNoKey = "ErrNoKey"
 )
+
 type Err string
 
 type PutArgs struct {
-  // You'll have to add definitions here.
-  Key string
-  Value string
+	// You'll have to add definitions here.
+	Key   string
+	Value string
 }
 
 type PutReply struct {
-  Err Err
+	Err Err
 }
 
 type GetArgs struct {
-  // You'll have to add definitions here.
-  Key string
+	// You'll have to add definitions here.
+	Key string
 }
 
 type GetReply struct {
-  Err Err
-  Value string
+	Err   Err
+	Value string
 }
